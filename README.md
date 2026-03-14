@@ -2,7 +2,7 @@
 
 > **Decentralized parametric insurance with community-governed claim resolution**
 
-niffyInsure is a **blockchain-based insurance platform** that lets users **buy insurance policies**, pay premiums, file claims, and resolve claims via a **DAO-style community vote** by policyholders. Policyholders vote on claims; the majority decides, and payouts execute automatically on-chain. It is built on **Stellar Soroban** (Rust → WASM smart contracts).
+niffyInsur is a **blockchain-based insurance platform** that lets users **buy insurance policies**, pay premiums, file claims, and resolve claims via a **DAO-style community vote** by policyholders. Policyholders vote on claims; the majority decides, and payouts execute automatically on-chain. It is built on **Stellar Soroban** (Rust → WASM smart contracts).
 
 ### Why Insurance On-Chain?
 
