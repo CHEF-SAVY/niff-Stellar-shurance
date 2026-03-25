@@ -2,8 +2,8 @@
 
 use niffyinsure::{
     types::{
-        Claim, ClaimStatus, Policy, PolicyType, RegionTier, VoteOption, DETAILS_MAX_LEN,
-        IMAGE_URLS_MAX, IMAGE_URL_MAX_LEN,
+        Claim, ClaimStatus, Policy, PolicyType, RegionTier, TerminationReason, VoteOption,
+        DETAILS_MAX_LEN, IMAGE_URLS_MAX, IMAGE_URL_MAX_LEN,
     },
     validate::{check_claim_fields, check_claim_open, check_policy, check_policy_active, Error},
 };
@@ -20,6 +20,9 @@ fn dummy_policy(env: &Env, start: u32, end: u32, coverage: i128, active: bool) -
         is_active: active,
         start_ledger: start,
         end_ledger: end,
+        terminated_at_ledger: 0,
+        termination_reason: TerminationReason::None,
+        terminated_by_admin: false,
     }
 }
 
