@@ -139,6 +139,25 @@
         }
       ]
     ],
+    [
+      [
+        "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM",
+        {
+          "function": {
+            "contract_fn": {
+              "contract_address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M",
+              "function_name": "process_claim",
+              "args": [
+                {
+                  "u64": "1"
+                }
+              ]
+            }
+          },
+          "sub_invocations": []
+        }
+      ]
+    ],
     []
   ],
   "ledger": {
@@ -201,6 +220,39 @@
                 "key": {
                   "ledger_key_nonce": {
                     "nonce": "801925984706572462"
+                  }
+                },
+                "durability": "temporary",
+                "val": "void"
+              }
+            },
+            "ext": "v0"
+          },
+          6311999
+        ]
+      ],
+      [
+        {
+          "contract_data": {
+            "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM",
+            "key": {
+              "ledger_key_nonce": {
+                "nonce": "4270020994084947596"
+              }
+            },
+            "durability": "temporary"
+          }
+        },
+        [
+          {
+            "last_modified_ledger_seq": 0,
+            "data": {
+              "contract_data": {
+                "ext": "v0",
+                "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM",
+                "key": {
+                  "ledger_key_nonce": {
+                    "nonce": "4270020994084947596"
                   }
                 },
                 "durability": "temporary",
@@ -324,6 +376,14 @@
                     },
                     {
                       "key": {
+                        "symbol": "filed_at"
+                      },
+                      "val": {
+                        "u32": 0
+                      }
+                    },
+                    {
+                      "key": {
                         "symbol": "image_urls"
                       },
                       "val": {
@@ -353,7 +413,7 @@
                       "val": {
                         "vec": [
                           {
-                            "symbol": "Approved"
+                            "symbol": "Paid"
                           }
                         ]
                       }
@@ -365,6 +425,103 @@
             "ext": "v0"
           },
           6000000
+        ]
+      ],
+      [
+        {
+          "contract_data": {
+            "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M",
+            "key": {
+              "vec": [
+                {
+                  "symbol": "ClaimVoters"
+                },
+                {
+                  "u64": "1"
+                }
+              ]
+            },
+            "durability": "persistent"
+          }
+        },
+        [
+          {
+            "last_modified_ledger_seq": 0,
+            "data": {
+              "contract_data": {
+                "ext": "v0",
+                "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M",
+                "key": {
+                  "vec": [
+                    {
+                      "symbol": "ClaimVoters"
+                    },
+                    {
+                      "u64": "1"
+                    }
+                  ]
+                },
+                "durability": "persistent",
+                "val": {
+                  "vec": [
+                    {
+                      "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4"
+                    },
+                    {
+                      "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM"
+                    }
+                  ]
+                }
+              }
+            },
+            "ext": "v0"
+          },
+          6000000
+        ]
+      ],
+      [
+        {
+          "contract_data": {
+            "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M",
+            "key": {
+              "vec": [
+                {
+                  "symbol": "LastClaimLedger"
+                },
+                {
+                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4"
+                }
+              ]
+            },
+            "durability": "persistent"
+          }
+        },
+        [
+          {
+            "last_modified_ledger_seq": 0,
+            "data": {
+              "contract_data": {
+                "ext": "v0",
+                "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M",
+                "key": {
+                  "vec": [
+                    {
+                      "symbol": "LastClaimLedger"
+                    },
+                    {
+                      "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4"
+                    }
+                  ]
+                },
+                "durability": "persistent",
+                "val": {
+                  "u32": 0
+                }
+              }
+            },
+            "ext": "v0"
+          },
+          4095
         ]
       ],
       [
@@ -487,7 +644,7 @@
                         "symbol": "start_ledger"
                       },
                       "val": {
-                        "u32": 1
+                        "u32": 0
                       }
                     }
                   ]
@@ -636,6 +793,36 @@
                         "key": {
                           "vec": [
                             {
+                              "symbol": "ActivePolicyCount"
+                            },
+                            {
+                              "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4"
+                            }
+                          ]
+                        },
+                        "val": {
+                          "u32": 1
+                        }
+                      },
+                      {
+                        "key": {
+                          "vec": [
+                            {
+                              "symbol": "ActivePolicyCount"
+                            },
+                            {
+                              "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM"
+                            }
+                          ]
+                        },
+                        "val": {
+                          "u32": 1
+                        }
+                      },
+                      {
+                        "key": {
+                          "vec": [
+                            {
                               "symbol": "Admin"
                             }
                           ]
@@ -648,12 +835,191 @@
                         "key": {
                           "vec": [
                             {
+                              "symbol": "AllowedAsset"
+                            },
+                            {
+                              "address": "CBEPDNVYXQGWB5YUBXKJWYJA7OXTZW5LFLNO5JRRGE6Z6C5OSUZPCCEL"
+                            }
+                          ]
+                        },
+                        "val": {
+                          "bool": true
+                        }
+                      },
+                      {
+                        "key": {
+                          "vec": [
+                            {
                               "symbol": "ClaimCounter"
                             }
                           ]
                         },
                         "val": {
                           "u64": "1"
+                        }
+                      },
+                      {
+                        "key": {
+                          "vec": [
+                            {
+                              "symbol": "PremiumTable"
+                            }
+                          ]
+                        },
+                        "val": {
+                          "map": [
+                            {
+                              "key": {
+                                "symbol": "age"
+                              },
+                              "val": {
+                                "map": [
+                                  {
+                                    "key": {
+                                      "vec": [
+                                        {
+                                          "symbol": "Adult"
+                                        }
+                                      ]
+                                    },
+                                    "val": {
+                                      "i128": "10000"
+                                    }
+                                  },
+                                  {
+                                    "key": {
+                                      "vec": [
+                                        {
+                                          "symbol": "Senior"
+                                        }
+                                      ]
+                                    },
+                                    "val": {
+                                      "i128": "11500"
+                                    }
+                                  },
+                                  {
+                                    "key": {
+                                      "vec": [
+                                        {
+                                          "symbol": "Young"
+                                        }
+                                      ]
+                                    },
+                                    "val": {
+                                      "i128": "12500"
+                                    }
+                                  }
+                                ]
+                              }
+                            },
+                            {
+                              "key": {
+                                "symbol": "coverage"
+                              },
+                              "val": {
+                                "map": [
+                                  {
+                                    "key": {
+                                      "vec": [
+                                        {
+                                          "symbol": "Basic"
+                                        }
+                                      ]
+                                    },
+                                    "val": {
+                                      "i128": "9000"
+                                    }
+                                  },
+                                  {
+                                    "key": {
+                                      "vec": [
+                                        {
+                                          "symbol": "Premium"
+                                        }
+                                      ]
+                                    },
+                                    "val": {
+                                      "i128": "13000"
+                                    }
+                                  },
+                                  {
+                                    "key": {
+                                      "vec": [
+                                        {
+                                          "symbol": "Standard"
+                                        }
+                                      ]
+                                    },
+                                    "val": {
+                                      "i128": "10000"
+                                    }
+                                  }
+                                ]
+                              }
+                            },
+                            {
+                              "key": {
+                                "symbol": "region"
+                              },
+                              "val": {
+                                "map": [
+                                  {
+                                    "key": {
+                                      "vec": [
+                                        {
+                                          "symbol": "High"
+                                        }
+                                      ]
+                                    },
+                                    "val": {
+                                      "i128": "13500"
+                                    }
+                                  },
+                                  {
+                                    "key": {
+                                      "vec": [
+                                        {
+                                          "symbol": "Low"
+                                        }
+                                      ]
+                                    },
+                                    "val": {
+                                      "i128": "8500"
+                                    }
+                                  },
+                                  {
+                                    "key": {
+                                      "vec": [
+                                        {
+                                          "symbol": "Medium"
+                                        }
+                                      ]
+                                    },
+                                    "val": {
+                                      "i128": "10000"
+                                    }
+                                  }
+                                ]
+                              }
+                            },
+                            {
+                              "key": {
+                                "symbol": "safety_discount"
+                              },
+                              "val": {
+                                "i128": "2000"
+                              }
+                            },
+                            {
+                              "key": {
+                                "symbol": "version"
+                              },
+                              "val": {
+                                "u32": 1
+                              }
+                            }
+                          ]
                         }
                       },
                       {
@@ -694,7 +1060,7 @@
             },
             "ext": "v0"
           },
-          6000000
+          4095
         ]
       ],
       [
@@ -1066,7 +1432,7 @@
             },
             "ext": "v0"
           },
-          6000000
+          4095
         ]
       ]
     ]

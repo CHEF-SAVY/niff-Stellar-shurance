@@ -1,4 +1,4 @@
-#![no_std]
+﻿#![no_std]
 
 mod claim;
 mod policy;
@@ -7,8 +7,14 @@ mod storage;
 mod token;
 pub mod types;
 pub mod validate;
+pub mod admin;
 
-use soroban_sdk::{contract, contractimpl, Address, Env, String, Vec};
+#[cfg(feature = "experimental")]
+mod oracle;
+#[cfg(feature = "experimental")]
+pub use oracle::*;
+
+use soroban_sdk::{contract, contractimpl, symbol_short, Address, Env, String, Vec};
 
 #[contract]
 pub struct NiffyInsure;
@@ -32,7 +38,15 @@ impl NiffyInsure {
         base_amount: i128,
         include_breakdown: bool,
     ) -> Result<types::PremiumQuote, validate::Error> {
-        policy::generate_premium(&env, input, base_amount, include_breakdown)
+        policy::generate_premium(
+            &env,
+            input.region,
+            input.age_band,
+            input.coverage,
+            input.safety_score,
+            base_amount,
+            include_breakdown,
+        )
     }
 
     pub fn quote_error_message(env: Env, code: u32) -> policy::QuoteFailure {
@@ -86,14 +100,17 @@ impl NiffyInsure {
         storage::get_multiplier_table(&env)
     }
 
-    pub fn set_allowed_asset(
-        env: Env,
-        asset: Address,
-        allowed: bool,
-    ) {
+    /// Admin-only: add or remove an asset from the allowlist.
+    /// Emits ("asset", "added") or ("asset", "removed") for indexers.
+    pub fn set_allowed_asset(env: Env, asset: Address, allowed: bool) {
         let admin = storage::get_admin(&env);
         admin.require_auth();
+        storage::bump_instance(&env);
         claim::set_allowed_asset(&env, &asset, allowed);
+        env.events().publish(
+            (symbol_short!("asset"), if allowed { symbol_short!("added") } else { symbol_short!("removed") }),
+            asset,
+        );
     }
 
     pub fn is_allowed_asset(env: Env, asset: Address) -> bool {
@@ -122,10 +139,6 @@ impl NiffyInsure {
         storage::has_policy(&env, &holder, policy_id)
     }
 
-    pub fn is_paused(env: Env) -> bool {
-        storage::is_paused(&env)
-    }
-
     pub fn get_voters(env: Env) -> Vec<Address> {
         storage::get_voters(&env)
     }
@@ -134,19 +147,23 @@ impl NiffyInsure {
 
     /// Turn an accepted quote into an enforceable on-chain policy.
     ///
-    /// Authenticates the holder, computes premium, transfers payment,
-    /// persists the policy, updates the DAO voter registry, and emits
-    /// a versioned `PolicyInitiated` event for NestJS indexers.
+    /// `asset` must be on the admin-controlled allowlist; it is bound to the
+    /// policy and used for both premium payment and future claim payouts.
     pub fn initiate_policy(
         env: Env,
         holder: Address,
         policy_type: types::PolicyType,
         region: types::RegionTier,
-        coverage: i128,
-        age: u32,
-        risk_score: u32,
+        age_band: types::AgeBand,
+        coverage_type: types::CoverageType,
+        safety_score: u32,
+        base_amount: i128,
+        asset: Address,
     ) -> Result<types::Policy, policy::PolicyError> {
-        policy::initiate_policy(&env, holder, policy_type, region, coverage, age, risk_score)
+        policy::initiate_policy(
+            &env, holder, policy_type, region,
+            age_band, coverage_type, safety_score, base_amount, asset,
+        )
     }
 
     /// Read-only: retrieve a persisted policy by (holder, policy_id).
@@ -161,8 +178,6 @@ impl NiffyInsure {
 
     // ── Admin / pause ────────────────────────────────────────────────────
 
-    /// Admin-only: pause the contract (blocks initiate_policy and future
-    /// mutating entrypoints).
     pub fn pause(env: Env, admin: Address) {
         admin.require_auth();
         let stored_admin = storage::get_admin(&env);
@@ -170,7 +185,6 @@ impl NiffyInsure {
         storage::set_paused(&env, true);
     }
 
-    /// Admin-only: unpause the contract.
     pub fn unpause(env: Env, admin: Address) {
         admin.require_auth();
         let stored_admin = storage::get_admin(&env);
@@ -178,21 +192,12 @@ impl NiffyInsure {
         storage::set_paused(&env, false);
     }
 
-    /// Read-only: check if the contract is paused.
     pub fn is_paused(env: Env) -> bool {
         storage::is_paused(&env)
     }
 
-    // ── Admin / treasury ─────────────────────────────────────────────────
-    // drain, set_paused
-    // implemented in token.rs — issue: feat/admin
-
     // ── Test-only helpers ─────────────────────────────────────────────────
-    // These are NOT part of the production ABI; they exist solely to let
-    // integration tests seed state without the full policy-lifecycle feature.
-    // Gated behind the `testutils` feature so they are excluded from WASM builds.
 
-    /// Seed a policy record and register the holder as a voter.
     #[cfg(feature = "testutils")]
     pub fn test_seed_policy(
         env: Env,
@@ -201,7 +206,8 @@ impl NiffyInsure {
         coverage: i128,
         end_ledger: u32,
     ) {
-        use crate::types::{Policy, PolicyType, RegionTier};
+        use crate::types::{AgeBand, CoverageType, Policy, PolicyType, RegionTier};
+        let token = storage::get_token(&env);
         let policy = Policy {
             holder: holder.clone(),
             policy_id,
@@ -212,6 +218,7 @@ impl NiffyInsure {
             is_active: true,
             start_ledger: 1,
             end_ledger,
+            asset: token,
         };
         env.storage()
             .persistent()
@@ -219,7 +226,6 @@ impl NiffyInsure {
         storage::add_voter(&env, &holder);
     }
 
-    /// Remove a holder from the live voter set (simulates policy termination).
     #[cfg(feature = "testutils")]
     pub fn test_remove_voter(env: Env, holder: Address) {
         storage::remove_voter(&env, &holder);

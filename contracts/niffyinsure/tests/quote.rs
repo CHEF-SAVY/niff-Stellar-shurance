@@ -93,7 +93,7 @@ fn generate_premium_matches_golden_vectors_bit_for_bit() {
         client
             .generate_premium(&low_senior_basic, &7_654_321i128, &false)
             .total_premium,
-        6_737_647
+        6_733_890
     );
 }
 

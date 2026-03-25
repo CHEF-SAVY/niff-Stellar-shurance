@@ -1,32 +1,19 @@
-use crate::{
+﻿use crate::{
+    calculator,
+    ledger,
     premium,
     storage,
     token,
-    types::{Policy, PolicyType, PremiumQuote, RegionTier},
-    validate,
+    types::{AgeBand, CoverageType, Policy, PolicyType, PremiumQuote, RegionTier, RiskInput},
+    validate::{self, Error},
 };
-use soroban_sdk::{contractevent, contracterror, contracttype, Address, Env, String};
+use soroban_sdk::{contractevent, contracterror, contracttype, symbol_short, Address, Env, String};
 
-/// How long a quote stays valid (in ledgers) from generation time.
-pub const QUOTE_TTL_LEDGERS: u32 = 100;
+pub use ledger::QUOTE_TTL_LEDGERS;
 
-/// Default policy duration in ledgers (~30 days at 5s/ledger ≈ 518_400).
-pub const POLICY_DURATION_LEDGERS: u32 = 518_400;
-
-/// Current event schema version for PolicyInitiated.
+/// Current event schema version.
 pub const POLICY_EVENT_VERSION: u32 = 1;
 
-#[contracterror]
-#[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
-#[repr(u32)]
-pub enum QuoteError {
-    InvalidAge = 1,
-    InvalidRiskScore = 2,
-    InvalidQuoteTtl = 3,
-    ArithmeticOverflow = 4,
-}
-
-/// Errors specific to policy initiation and lifecycle.
 #[contracterror]
 #[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
 #[repr(u32)]
@@ -37,7 +24,7 @@ pub enum PolicyError {
     DuplicatePolicyId = 101,
     /// Coverage must be > 0.
     InvalidCoverage = 102,
-    /// Computed premium is zero or negative (should not happen with valid inputs).
+    /// Computed premium is zero or negative.
     InvalidPremium = 103,
     /// Premium computation overflowed.
     PremiumOverflow = 104,
@@ -45,12 +32,18 @@ pub enum PolicyError {
     LedgerOverflow = 105,
     /// Policy struct failed internal validation.
     PolicyValidation = 106,
-    /// Caller is not authorized (require_auth failed or wrong signer).
+    /// Caller is not authorized.
     Unauthorized = 107,
     /// Age out of range (1..=120).
     InvalidAge = 108,
-    /// Risk score out of range (1..=10).
+    /// Risk score out of range (0..=100).
     InvalidRiskScore = 109,
+    /// Supplied asset is not on the admin-controlled allowlist.
+    AssetNotAllowed = 110,
+    /// Policy not found.
+    NotFound = 111,
+    /// Policy is already active.
+    AlreadyActive = 112,
 }
 
 #[contracttype]
@@ -61,17 +54,9 @@ pub struct QuoteFailure {
 }
 
 /// Versioned event emitted by `initiate_policy`.
-///
-/// NestJS indexers subscribe to this event to render dashboards without
-/// scanning entire storage.  The `version` field allows the indexer consumer
-/// to be versioned alongside contract releases.
-///
-/// Topic fields (`holder`) are indexed for efficient subscription filtering.
-/// Data fields are serialised as a map in the event body.
 #[contractevent]
 #[derive(Clone, Debug)]
 pub struct PolicyInitiated {
-    /// Schema version; currently 1.
     #[topic]
     pub holder: Address,
     pub version: u32,
@@ -85,21 +70,39 @@ pub struct PolicyInitiated {
     pub end_ledger: u32,
 }
 
+/// Event emitted by `renew_policy`.
+#[contractevent]
+#[derive(Clone, Debug)]
+pub struct PolicyRenewed {
+    #[topic]
+    pub holder: Address,
+    pub policy_id: u32,
+    pub premium: i128,
+    pub new_end_ledger: u32,
+}
+
 pub fn generate_premium(
     env: &Env,
-    input: RiskInput,
+    region: RegionTier,
+    age_band: AgeBand,
+    coverage_type: CoverageType,
+    safety_score: u32,
     base_amount: i128,
     include_breakdown: bool,
-) -> Result<PremiumQuote, Error> {
+) -> Result<PremiumQuote, validate::Error> {
+    let input = RiskInput {
+        region,
+        age_band,
+        coverage: coverage_type,
+        safety_score,
+    };
+
     validate::check_risk_input(&input)?;
     if base_amount <= 0 {
-        return Err(Error::InvalidBaseAmount);
-    }
-    if QUOTE_TTL_LEDGERS == 0 {
-        return Err(Error::InvalidQuoteTtl);
+        return Err(validate::Error::InvalidBaseAmount);
     }
 
-    let table = crate::storage::get_multiplier_table(env);
+    let table = storage::get_multiplier_table(env);
     let computation = premium::compute_premium(&input, base_amount, &table)?;
     let line_items = if include_breakdown {
         Some(premium::build_line_items(env, &computation))
@@ -110,7 +113,7 @@ pub fn generate_premium(
     let current_ledger = env.ledger().sequence();
     let valid_until_ledger = current_ledger
         .checked_add(QUOTE_TTL_LEDGERS)
-        .ok_or(Error::Overflow)?;
+        .ok_or(validate::Error::Overflow)?;
 
     Ok(PremiumQuote {
         total_premium: computation.total_premium,
@@ -130,12 +133,8 @@ pub fn map_quote_error(env: &Env, err: Error) -> QuoteFailure {
         Error::MissingCoverageMultiplier => "premium table missing one or more coverage multipliers",
         Error::RegionMultiplierOutOfBounds => "region multiplier out of bounds: expected 0.5000x..=5.0000x",
         Error::AgeMultiplierOutOfBounds => "age-band multiplier out of bounds: expected 0.5000x..=5.0000x",
-        Error::CoverageMultiplierOutOfBounds => {
-            "coverage multiplier out of bounds: expected 0.5000x..=5.0000x"
-        }
-        Error::SafetyDiscountOutOfBounds => {
-            "safety discount out of bounds: expected 0.0000x..=0.5000x"
-        }
+        Error::CoverageMultiplierOutOfBounds => "coverage multiplier out of bounds: expected 0.5000x..=5.0000x",
+        Error::SafetyDiscountOutOfBounds => "safety discount out of bounds: expected 0.0000x..=0.5000x",
         Error::Overflow => "pricing arithmetic overflow: reduce base amount or multiplier values",
         Error::DivideByZero => "pricing divide by zero: check configured scaling factors",
         Error::InvalidQuoteTtl => "quote ttl misconfigured: contact support",
@@ -158,6 +157,13 @@ pub fn map_quote_error(env: &Env, err: Error) -> QuoteFailure {
         Error::ReasonTooLong => "termination reason exceeds maximum length",
         Error::ClaimAlreadyTerminal => "claim already reached a terminal status",
         Error::DuplicateVote => "duplicate vote detected",
+        Error::CalculatorNotSet => "no external calculator configured",
+        Error::CalculatorCallFailed => "cross-contract call to premium calculator failed",
+        Error::CalculatorPaused => "premium calculator is paused; policy bind rejected",
+        Error::VotingWindowClosed => "voting window has closed; use finalize_claim",
+        Error::VotingWindowStillOpen => "voting window is still open; cannot finalize yet",
+        Error::NotEligibleVoter => "caller is not in the claim voter snapshot",
+        Error::RateLimitExceeded => "claim rate-limit: wait before filing another claim",
     };
     QuoteFailure {
         code: err as u32,
@@ -167,77 +173,72 @@ pub fn map_quote_error(env: &Env, err: Error) -> QuoteFailure {
 
 /// Turns an accepted quote into an enforceable on-chain policy.
 ///
-/// # Auth
-/// `holder.require_auth()` — only the policyholder may initiate.
-///
-/// # Flow
-/// 1. Check contract is not paused.
-/// 2. Authenticate the holder.
-/// 3. Validate inputs (age, risk_score, coverage).
-/// 4. Compute premium via `premium::compute_premium_checked`.
-/// 5. Allocate a unique per-holder `policy_id` (idempotent: if a client
-///    retries after a failed tx the counter is only bumped on success).
-/// 6. Transfer premium from holder → contract address.
-/// 7. Persist the `Policy` struct with `is_active = true`.
-/// 8. Update voter registry (add holder, increment active-policy count).
-/// 9. Emit versioned `PolicyInitiated` event for NestJS indexers.
-///
-/// All durable writes happen **after** the premium transfer so that a failed
-/// transfer leaves zero partial state (no policy, no voter entry).
+/// # Asset
+/// `asset` must be on the admin-controlled allowlist at call time.
+/// The asset is bound to the policy and used for both premium payment
+/// and future claim payouts — no cross-asset settlement in MVP.
 pub fn initiate_policy(
     env: &Env,
     holder: Address,
     policy_type: PolicyType,
     region: RegionTier,
-    coverage: i128,
-    age: u32,
-    risk_score: u32,
+    age_band: AgeBand,
+    coverage_type: CoverageType,
+    safety_score: u32,
+    base_amount: i128,
+    asset: Address,
 ) -> Result<Policy, PolicyError> {
-    // 1. Pause guard
     if storage::is_paused(env) {
         return Err(PolicyError::ContractPaused);
     }
 
-    // 2. Authenticate the holder
+    // Asset allowlist check — before auth so callers get a clear error.
+    if !storage::is_allowed_asset(env, &asset) {
+        return Err(PolicyError::AssetNotAllowed);
+    }
+
     holder.require_auth();
 
-    // 3. Input validation
-    if age == 0 || age > 120 {
-        return Err(PolicyError::InvalidAge);
-    }
-    if risk_score == 0 || risk_score > 10 {
+    let input = RiskInput {
+        region: region.clone(),
+        age_band: age_band.clone(),
+        coverage: coverage_type,
+        safety_score,
+    };
+
+    if safety_score > 100 {
         return Err(PolicyError::InvalidRiskScore);
     }
-    if coverage <= 0 {
+    if base_amount <= 0 {
         return Err(PolicyError::InvalidCoverage);
     }
 
-    // 4. Compute premium (smallest units / stroops)
-    let premium_amount = premium::compute_premium_checked(&policy_type, &region, age, risk_score)
-        .ok_or(PolicyError::PremiumOverflow)?;
+    // Compute premium via the calculator (external or local fallback).
+    let quote = crate::calculator::compute_quote(env, &input, base_amount, false, QUOTE_TTL_LEDGERS)
+        .map_err(|e| match e {
+            validate::Error::CalculatorPaused => PolicyError::ContractPaused,
+            validate::Error::CalculatorCallFailed | validate::Error::CalculatorNotSet => PolicyError::PremiumOverflow,
+            _ => PolicyError::PremiumOverflow,
+        })?;
+    let premium_amount = quote.total_premium;
     if premium_amount <= 0 {
         return Err(PolicyError::InvalidPremium);
     }
 
-    // 5. Allocate unique per-holder policy_id
+    // Allocate unique per-holder policy_id.
     let policy_id = storage::next_policy_id(env, &holder);
 
-    // Enforce uniqueness (defensive — next_policy_id is monotonic, but guard
-    // against any future code path that might manually set an id).
     if storage::has_policy(env, &holder, policy_id) {
         return Err(PolicyError::DuplicatePolicyId);
     }
 
-    // 6. Premium transfer: holder → contract address
-    //    Done BEFORE any durable writes so failure leaves no partial state.
-    let token_addr = storage::get_token(env);
-    let contract_addr = env.current_contract_address();
-    token::transfer(env, &token_addr, &holder, &contract_addr, premium_amount);
+    // Premium transfer: holder -> treasury using the policy's bound asset.
+    // Done BEFORE any durable writes so failure leaves no partial state.
+    token::collect_premium(env, &holder, &asset, premium_amount);
 
-    // 7. Build and validate policy struct
     let current_ledger = env.ledger().sequence();
     let end_ledger = current_ledger
-        .checked_add(POLICY_DURATION_LEDGERS)
+        .checked_add(ledger::POLICY_DURATION_LEDGERS)
         .ok_or(PolicyError::LedgerOverflow)?;
 
     let policy = Policy {
@@ -246,31 +247,27 @@ pub fn initiate_policy(
         policy_type: policy_type.clone(),
         region: region.clone(),
         premium: premium_amount,
-        coverage,
+        coverage: base_amount,
         is_active: true,
         start_ledger: current_ledger,
         end_ledger,
+        asset: asset.clone(),
     };
 
-    // Run structural validation (coverage > 0, premium > 0, ledger window).
     validate::check_policy(&policy).map_err(|_| PolicyError::PolicyValidation)?;
 
-    // 8. Persist policy
     storage::set_policy(env, &holder, policy_id, &policy);
-
-    // 9. Update voter registry
     storage::add_voter(env, &holder);
 
-    // 10. Emit versioned PolicyInitiated event
     PolicyInitiated {
         version: POLICY_EVENT_VERSION,
         policy_id,
         holder: holder.clone(),
         premium: premium_amount,
-        asset: token_addr,
+        asset: asset.clone(),
         policy_type,
         region,
-        coverage,
+        coverage: base_amount,
         start_ledger: current_ledger,
         end_ledger,
     }

@@ -224,6 +224,7 @@ export async function buildInitiatePolicyTransaction(args: {
   coverage: bigint;
   age: number;
   riskScore: number;
+  asset?: string;
   startLedger?: number;
   durationLedgers?: number;
 }): Promise<BuildTransactionResult> {
@@ -234,6 +235,9 @@ export async function buildInitiatePolicyTransaction(args: {
   const startLedger = args.startLedger ?? ledgerInfo.sequence;
   const endLedger = startLedger + (args.durationLedgers ?? 1_051_200);
 
+  // Resolve asset: use caller-supplied address or fall back to configured default.
+  const assetAddress = args.asset ?? process.env.DEFAULT_TOKEN_CONTRACT_ID ?? '';
+
   const scArgs = [
     new Address(args.holder).toScVal(),
     enumVariantToScVal(args.policyType),
@@ -243,6 +247,7 @@ export async function buildInitiatePolicyTransaction(args: {
     nativeToScVal(args.riskScore, { type: 'u32' }),
     nativeToScVal(startLedger, { type: 'u32' }),
     nativeToScVal(endLedger, { type: 'u32' }),
+    new Address(assetAddress).toScVal(),
   ];
 
   const contract = new Contract(config.stellar.contractId);

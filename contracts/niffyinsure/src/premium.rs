@@ -63,7 +63,7 @@ pub fn update_multiplier_table(env: &Env, new_table: &MultiplierTable) -> Result
     validate_multiplier_table(env, new_table)?;
     storage::set_multiplier_table(env, new_table);
     env.events().publish(
-        (symbol_short!("premium_cfg"),),
+        (symbol_short!("prm_cfg"),),
         PremiumTableUpdated {
             version: new_table.version,
         },
@@ -225,13 +225,13 @@ fn validate_multiplier_table(env: &Env, table: &MultiplierTable) -> Result<(), E
 
 fn validate_table_rows<T>(table: &Map<T, i128>, kind: MultiplierKind) -> Result<(), Error>
 where
-    T: Clone,
+    T: Clone + soroban_sdk::TryFromVal<soroban_sdk::Env, soroban_sdk::Val> + soroban_sdk::IntoVal<soroban_sdk::Env, soroban_sdk::Val>,
 {
     if table.len() != 3u32 {
         return Err(kind.missing_error());
     }
 
-    for value in table.values() {
+    for (_, value) in table.iter() {
         if value < MIN_MULTIPLIER || value > MAX_MULTIPLIER {
             return Err(kind.bounds_error());
         }

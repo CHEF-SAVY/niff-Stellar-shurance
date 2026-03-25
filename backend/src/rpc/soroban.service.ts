@@ -226,6 +226,7 @@ export class SorobanService {
     coverage: bigint;
     age: number;
     riskScore: number;
+    asset?: string;
     startLedger?: number;
     durationLedgers?: number;
   }): Promise<BuildTransactionResult> {
@@ -236,6 +237,9 @@ export class SorobanService {
     const startLedger = args.startLedger ?? ledgerInfo.sequence;
     const endLedger = startLedger + (args.durationLedgers ?? 1_051_200);
 
+    // Resolve asset: use caller-supplied address or fall back to the configured default token.
+    const assetAddress = args.asset ?? this.configService.get<string>('DEFAULT_TOKEN_CONTRACT_ID', '');
+
     const scArgs = [
       new Address(args.holder).toScVal(),
       SorobanService.enumVariantToScVal(args.policyType),
@@ -245,6 +249,7 @@ export class SorobanService {
       nativeToScVal(args.riskScore, { type: 'u32' }),
       nativeToScVal(startLedger, { type: 'u32' }),
       nativeToScVal(endLedger, { type: 'u32' }),
+      new Address(assetAddress).toScVal(),
     ];
 
     const contract = new Contract(this.contractId);
@@ -305,6 +310,32 @@ export class SorobanService {
         'Frontends may set an optional text memo (≤28 bytes) for UI session correlation.',
       currentLedger: ledgerInfo.sequence,
     };
+  }
+
+  /**
+   * Fetch events for the configured contract ID within a ledger range.
+   */
+  async getEvents(startLedger: number, limit = 50): Promise<SorobanRpc.Api.GetEventsResponse> {
+    const server = this.makeServer();
+    return await server.getEvents({
+      startLedger,
+      filters: [
+        {
+          type: 'contract',
+          contractIds: [this.contractId],
+        },
+      ],
+      limit,
+    });
+  }
+
+  /**
+   * Fetch the latest ledger sequence from the network.
+   */
+  async getLatestLedger(): Promise<number> {
+    const server = this.makeServer();
+    const info = await server.getLatestLedger();
+    return info.sequence;
   }
 
   /**

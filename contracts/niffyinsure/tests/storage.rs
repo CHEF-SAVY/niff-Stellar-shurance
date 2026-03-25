@@ -38,7 +38,7 @@ fn make_policy(holder: &Address, policy_id: u32) -> Policy {
         premium: 10_000_000,
         coverage: 100_000_000,
         is_active: true,
-        start_ledger: 1,
+        start_ledger: 0,
         end_ledger: 9_999_999,
     }
 }
@@ -155,6 +155,7 @@ fn set_and_get_claim_round_trip() {
             status: ClaimStatus::Processing,
             approve_votes: 0,
             reject_votes: 0,
+            filed_at: 1,
         };
         storage::set_claim(&env, &claim);
         let loaded = storage::get_claim(&env, 1).expect("claim must exist");
@@ -232,9 +233,12 @@ fn full_claim_vote_flow_approve() {
     let s1 = client.vote_on_claim(&holder, &claim_id, &VoteOption::Approve);
     assert_eq!(s1, ClaimStatus::Processing);
 
-    // 2 of 2 votes — majority reached → Approved + payout executed
+    // 2 of 2 votes — majority reached → Approved
     let s2 = client.vote_on_claim(&voter2, &claim_id, &VoteOption::Approve);
     assert_eq!(s2, ClaimStatus::Approved);
+
+    // Admin triggers payout for the approved claim.
+    client.process_claim(&claim_id);
 
     // Verify payout landed in claimant's account.
     let token_ro = soroban_sdk::token::TokenClient::new(&env, &token_addr);
@@ -313,8 +317,7 @@ fn non_voter_cannot_vote() {
 
 #[test]
 fn generate_premium_does_not_mutate_counters() {
-    use niffyinsure::types::PolicyType;
-    use niffyinsure::types::RegionTier;
+    use niffyinsure::types::{AgeBand, CoverageType, RegionTier, RiskInput};
 
     let (env, contract_id, _, _) = setup();
     let client = NiffyInsureClient::new(&env, &contract_id);
@@ -323,13 +326,13 @@ fn generate_premium_does_not_mutate_counters() {
     let before_cc = client.get_claim_counter();
     let before_pc = client.get_policy_counter(&holder);
 
-    client.generate_premium(
-        &PolicyType::Auto,
-        &RegionTier::Medium,
-        &30u32,
-        &6u32,
-        &false,
-    );
+    let input = RiskInput {
+        region: RegionTier::Medium,
+        age_band: AgeBand::Adult,
+        coverage: CoverageType::Standard,
+        safety_score: 0,
+    };
+    client.generate_premium(&input, &10_000_000i128, &false);
 
     assert_eq!(before_cc, client.get_claim_counter());
     assert_eq!(before_pc, client.get_policy_counter(&holder));

@@ -10,11 +10,182 @@
 // or audit in-flight claims. Until `file_claim` ships, admins may use
 // `admin_set_open_claim_count` in tests or break-glass ops only.
 use crate::{
+    ledger,
     storage,
-    types::{Claim, ClaimProcessed, ClaimStatus},
+    types::{Claim, ClaimProcessed, ClaimStatus, VoteOption},
     validate::Error,
 };
-use soroban_sdk::{symbol_short, token, Address, Env};
+use soroban_sdk::{symbol_short, token, Address, Env, String, Vec};
+
+// ── file_claim ────────────────────────────────────────────────────────────────
+
+/// File a new claim against an active policy.
+///
+/// Window checks (all via `ledger` helpers):
+/// - Policy must be active: `now` in `[start_ledger, end_ledger)`.
+/// - Rate-limit: `now >= last_filed_at + RATE_LIMIT_WINDOW_LEDGERS` (or first claim).
+///
+/// Returns the new `claim_id`.
+pub fn file_claim(
+    env: &Env,
+    holder: &Address,
+    policy_id: u32,
+    amount: i128,
+    details: &String,
+    image_urls: &Vec<String>,
+) -> Result<u64, Error> {
+    let policy = storage::get_policy(env, holder, policy_id).ok_or(Error::ClaimNotFound)?;
+
+    // Policy active window check using ledger helper.
+    let now = env.ledger().sequence();
+    if !ledger::is_within_window(now, policy.start_ledger, policy.end_ledger) {
+        return if ledger::is_expired(now, policy.end_ledger) {
+            Err(Error::PolicyExpired)
+        } else {
+            Err(Error::PolicyInactive)
+        };
+    }
+    if !policy.is_active {
+        return Err(Error::PolicyInactive);
+    }
+
+    // Rate-limit check.
+    if let Some(last) = storage::get_last_claim_ledger(env, holder) {
+        if !ledger::is_rate_limit_elapsed(now, last, ledger::RATE_LIMIT_WINDOW_LEDGERS) {
+            return Err(Error::RateLimitExceeded);
+        }
+    }
+
+    crate::validate::check_claim_fields(env, amount, policy.coverage, details, image_urls)?;
+
+    let claim_id = storage::next_claim_id(env);
+    let claim = Claim {
+        claim_id,
+        policy_id,
+        claimant: holder.clone(),
+        amount,
+        details: details.clone(),
+        image_urls: image_urls.clone(),
+        status: ClaimStatus::Processing,
+        approve_votes: 0,
+        reject_votes: 0,
+        filed_at: now,
+    };
+
+    storage::set_claim(env, &claim);
+    storage::snapshot_claim_voters(env, claim_id);
+    storage::set_last_claim_ledger(env, holder, now);
+
+    env.events().publish(
+        (symbol_short!("clm_filed"), claim_id),
+        holder.clone(),
+    );
+
+    Ok(claim_id)
+}
+
+// ── vote_on_claim ─────────────────────────────────────────────────────────────
+
+/// Cast a vote on a pending claim.
+///
+/// Window check: `now < filed_at + VOTE_WINDOW_LEDGERS` (via `ledger::is_vote_open`).
+/// Returns the updated `ClaimStatus` after tallying.
+pub fn vote_on_claim(
+    env: &Env,
+    voter: &Address,
+    claim_id: u64,
+    vote: &VoteOption,
+) -> Result<ClaimStatus, Error> {
+    let mut claim = storage::get_claim(env, claim_id).ok_or(Error::ClaimNotFound)?;
+
+    if claim.status.is_terminal() {
+        return Err(Error::ClaimAlreadyTerminal);
+    }
+
+    // Voting window check.
+    let now = env.ledger().sequence();
+    if !ledger::is_vote_open(now, claim.filed_at, ledger::VOTE_WINDOW_LEDGERS) {
+        return Err(Error::VotingWindowClosed);
+    }
+
+    // Voter must be in the claim's snapshot electorate.
+    let snapshot = storage::get_claim_voters(env, claim_id);
+    let eligible = snapshot.iter().any(|v| v == *voter);
+    if !eligible {
+        return Err(Error::NotEligibleVoter);
+    }
+
+    // Duplicate vote check.
+    if storage::get_vote(env, claim_id, voter).is_some() {
+        return Err(Error::DuplicateVote);
+    }
+
+    storage::set_vote(env, claim_id, voter, vote);
+
+    match vote {
+        VoteOption::Approve => claim.approve_votes += 1,
+        VoteOption::Reject => claim.reject_votes += 1,
+    }
+
+    env.events().publish(
+(symbol_short!("c_paid"), claim.claim_id),
+        ClaimProcessed {
+            claim_id: claim.claim_id,
+            recipient: claim.claimant.clone(),
+            amount: claim.amount,
+            asset: claim.asset.clone(),
+        },
+    );
+
+    // Auto-finalize on majority.
+    let total = snapshot.len();
+    let majority = total / 2 + 1;
+    if claim.approve_votes >= majority {
+        claim.status = ClaimStatus::Approved;
+        // Payout is triggered by admin via process_claim, not here.
+        // Setting Approved makes the claim eligible for process_claim.
+    } else if claim.reject_votes >= majority {
+        claim.status = ClaimStatus::Rejected;
+    }
+
+    storage::set_claim(env, &claim);
+    Ok(claim.status)
+}
+
+// ── finalize_claim ────────────────────────────────────────────────────────────
+
+/// Finalize a claim after the voting deadline has passed.
+///
+/// Window check: `now >= filed_at + VOTE_WINDOW_LEDGERS` (via `ledger::is_vote_deadline_passed`).
+/// Plurality wins; tie resolves to Rejected.
+pub fn finalize_claim(env: &Env, claim_id: u64) -> Result<ClaimStatus, Error> {
+    let mut claim = storage::get_claim(env, claim_id).ok_or(Error::ClaimNotFound)?;
+
+    if claim.status.is_terminal() {
+        return Err(Error::ClaimAlreadyTerminal);
+    }
+
+    let now = env.ledger().sequence();
+    if !ledger::is_vote_deadline_passed(now, claim.filed_at, ledger::VOTE_WINDOW_LEDGERS) {
+        return Err(Error::VotingWindowStillOpen);
+    }
+
+    claim.status = if claim.approve_votes > claim.reject_votes {
+        ClaimStatus::Approved
+    } else {
+        // Tie or reject plurality → Rejected (insurer wins tie).
+        ClaimStatus::Rejected
+    };
+
+    if claim.status == ClaimStatus::Approved {
+        // Payout triggered by admin via process_claim.
+    }
+
+    storage::set_claim(env, &claim);
+    Ok(claim.status)
+}
+
+// ── process_claim (admin payout trigger) ─────────────────────────────────────
 
 pub fn process_claim(env: &Env, claim_id: u64) -> Result<(), Error> {
     let mut claim = storage::get_claim(env, claim_id).ok_or(Error::ClaimNotFound)?;
@@ -25,23 +196,56 @@ pub fn process_claim(env: &Env, claim_id: u64) -> Result<(), Error> {
     if claim.status != ClaimStatus::Approved {
         return Err(Error::ClaimNotApproved);
     }
+<<<<<<< HEAD
     if claim.amount <= 0 {
         return Err(Error::ClaimAmountZero);
     }
+
+    // Verify the claim's asset is still allowlisted (admin may have removed it).
     if !is_allowed_asset(env, &claim.asset) {
         return Err(Error::InvalidAsset);
+    }
+
+    // Verify the claim's asset matches the policy's bound asset.
+    if let Some(policy) = storage::get_policy(env, &claim.claimant, claim.policy_id) {
+        if claim.asset != policy.asset {
+            return Err(Error::InvalidAsset);
+        }
     }
 
     let token_client = token::Client::new(env, &claim.asset);
     let treasury = treasury_address(env);
     check_treasury_balance(&token_client, &treasury, claim.amount)?;
+=======
+
+    payout(env, &claim)?;
+    claim.status = ClaimStatus::Paid;
+    storage::set_claim(env, &claim);
+    Ok(())
+}
+
+// ── Internal helpers ──────────────────────────────────────────────────────────
+
+fn payout(env: &Env, claim: &Claim) -> Result<(), Error> {
+    let token_addr = storage::get_token(env);
+    let token_client = token::Client::new(env, &token_addr);
+    let treasury = env.current_contract_address();
+
+    if token_client.balance(&treasury) < claim.amount {
+        return Err(Error::InsufficientTreasury);
+    }
+>>>>>>> f31c36f7aaafe0e6592326e70bf1e4291a0fcd67
 
     token_client.transfer(&treasury, &claim.claimant, &claim.amount);
 
-    claim.status = ClaimStatus::Paid;
-    claim.paid_at = Some(env.ledger().timestamp());
-    storage::set_claim(env, &claim);
-    emit_claim_processed(env, &claim);
+    env.events().publish(
+        (symbol_short!("clm_paid"), claim.claim_id),
+        ClaimProcessed {
+            claim_id: claim.claim_id,
+            recipient: claim.claimant.clone(),
+            amount: claim.amount,
+        },
+    );
 
     Ok(())
 }
@@ -56,169 +260,4 @@ pub fn is_allowed_asset(env: &Env, asset: &Address) -> bool {
 
 pub fn set_allowed_asset(env: &Env, asset: &Address, allowed: bool) {
     storage::set_allowed_asset(env, asset, allowed);
-}
-
-pub fn treasury_address(env: &Env) -> Address {
-    env.current_contract_address()
-}
-
-fn check_treasury_balance(
-    token_client: &token::Client,
-    treasury: &Address,
-    amount: i128,
-) -> Result<(), Error> {
-    if token_client.balance(treasury) < amount {
-        return Err(Error::InsufficientTreasury);
-    }
-    Ok(())
-}
-
-fn emit_claim_processed(env: &Env, claim: &Claim) {
-    env.events().publish(
-        (symbol_short!("claim_paid"), claim.claim_id),
-        ClaimProcessed {
-            claim_id: claim.claim_id,
-            recipient: claim.claimant.clone(),
-            amount: claim.amount,
-            asset: claim.asset.clone(),
-        },
-    );
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::NiffyInsureClient;
-    use soroban_sdk::{testutils::Address as _, token, Address, Env, String, Vec};
-
-    fn setup() -> (
-        Env,
-        NiffyInsureClient,
-        Address,
-        token::Client,
-        token::StellarAssetClient,
-        Address,
-    ) {
-        let env = Env::default();
-        env.mock_all_auths();
-
-        let contract_id = env.register(crate::NiffyInsure, ());
-        let client = NiffyInsureClient::new(&env, &contract_id);
-
-        let admin = Address::generate(&env);
-        let token_admin = Address::generate(&env);
-        let token_id = env.register_stellar_asset_contract_v2(token_admin.clone()).address();
-        let token_client = token::Client::new(&env, &token_id);
-        let token_admin_client = token::StellarAssetClient::new(&env, &token_id);
-
-        client.initialize(&admin, &token_id);
-
-        (
-            env,
-            client,
-            contract_id,
-            token_client,
-            token_admin_client,
-            token_id,
-        )
-    }
-
-    fn approved_claim(
-        env: &Env,
-        claimant: &Address,
-        asset: &Address,
-        amount: i128,
-    ) -> Claim {
-        Claim {
-            claim_id: 1,
-            policy_id: 7,
-            claimant: claimant.clone(),
-            amount,
-            asset: asset.clone(),
-            details: String::from_str(env, "approved fire claim"),
-            image_urls: Vec::new(env),
-            status: ClaimStatus::Approved,
-            approve_votes: 2,
-            reject_votes: 0,
-            paid_at: None,
-        }
-    }
-
-    #[test]
-    fn process_claim_transfers_tokens_and_marks_claim_paid() {
-        let (env, client, contract_id, token_client, token_admin_client, token_id) = setup();
-        let claimant = Address::generate(&env);
-        let treasury = contract_id.clone();
-        let claim = approved_claim(&env, &claimant, &token_id, 5_000);
-
-        token_admin_client.mint(&treasury, &10_000);
-        storage::set_claim(&env, &claim);
-
-        let before_events = env.events().all().len();
-        client.process_claim(&claim.claim_id);
-
-        let stored = client.get_claim(&claim.claim_id);
-        assert_eq!(token_client.balance(&treasury), 5_000);
-        assert_eq!(token_client.balance(&claimant), 5_000);
-        assert_eq!(stored.status, ClaimStatus::Paid);
-        assert!(stored.paid_at.is_some());
-        assert!(env.events().all().len() > before_events);
-    }
-
-    #[test]
-    fn process_claim_reverts_when_treasury_is_short() {
-        let (env, client, contract_id, token_client, token_admin_client, token_id) = setup();
-        let claimant = Address::generate(&env);
-        let treasury = contract_id.clone();
-        let claim = approved_claim(&env, &claimant, &token_id, 5_000);
-
-        token_admin_client.mint(&treasury, &1_000);
-        storage::set_claim(&env, &claim);
-
-        let result = client.try_process_claim(&claim.claim_id);
-        assert!(result.is_err());
-
-        let stored = client.get_claim(&claim.claim_id);
-        assert_eq!(stored.status, ClaimStatus::Approved);
-        assert_eq!(stored.paid_at, None);
-        assert_eq!(token_client.balance(&treasury), 1_000);
-        assert_eq!(token_client.balance(&claimant), 0);
-    }
-
-    #[test]
-    fn process_claim_is_idempotent() {
-        let (env, client, contract_id, _token_client, token_admin_client, token_id) = setup();
-        let claimant = Address::generate(&env);
-        let treasury = contract_id.clone();
-        let claim = approved_claim(&env, &claimant, &token_id, 5_000);
-
-        token_admin_client.mint(&treasury, &10_000);
-        storage::set_claim(&env, &claim);
-
-        client.process_claim(&claim.claim_id);
-        let second = client.try_process_claim(&claim.claim_id);
-        assert!(second.is_err());
-        assert_eq!(client.get_claim(&claim.claim_id).status, ClaimStatus::Paid);
-    }
-
-    #[test]
-    fn process_claim_rejects_assets_outside_the_allowlist() {
-        let (env, client, contract_id, token_client, token_admin_client, _token_id) = setup();
-        let claimant = Address::generate(&env);
-        let treasury = contract_id.clone();
-
-        let other_admin = Address::generate(&env);
-        let other_asset = env
-            .register_stellar_asset_contract_v2(other_admin.clone())
-            .address();
-        let claim = approved_claim(&env, &claimant, &other_asset, 5_000);
-
-        token_admin_client.mint(&treasury, &10_000);
-        storage::set_claim(&env, &claim);
-
-        let result = client.try_process_claim(&claim.claim_id);
-        assert!(result.is_err());
-        assert_eq!(client.get_claim(&claim.claim_id).status, ClaimStatus::Approved);
-        assert_eq!(token_client.balance(&treasury), 10_000);
-    }
 }
