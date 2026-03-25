@@ -95,6 +95,18 @@ pub fn set_token(env: &Env, new_token: Address) {
     );
 }
 
+/// Update the treasury address. Admin must authorize.
+/// Emits: ("admin", "treasury") → (old_treasury, new_treasury)
+pub fn set_treasury(env: &Env, new_treasury: Address) {
+    let _admin = require_admin(env);
+    let old_treasury = storage::get_treasury(env);
+    storage::set_treasury(env, &new_treasury);
+    env.events().publish(
+        (symbol_short!("admin"), symbol_short!("treasury")),
+        (old_treasury, new_treasury),
+    );
+}
+
 /// Pause the contract. Admin must authorize.
 /// Emits: ("admin", "paused") → (admin)
 pub fn pause(env: &Env) {
