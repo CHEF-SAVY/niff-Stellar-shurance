@@ -63,6 +63,19 @@ export const BuildTransactionDtoSchema = z.object({
     .max(10, 'risk_score must be between 1 and 10'),
 
   /**
+   * SEP-41 asset contract ID to use for premium payment and claim payout.
+   * Must be on the contract's admin-controlled allowlist.
+   * Defaults to the contract's default token if omitted.
+   */
+  asset: z
+    .string()
+    .regex(
+      /^C[A-Z2-7]{55}$/,
+      'asset must be a valid Stellar contract address (C...)',
+    )
+    .optional(),
+
+  /**
    * Ledger sequence at which the policy should start.
    * If omitted, defaults to the current ledger returned by the RPC.
    */

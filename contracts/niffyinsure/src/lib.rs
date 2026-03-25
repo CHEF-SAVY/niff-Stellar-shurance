@@ -7,8 +7,9 @@ mod storage;
 mod token;
 pub mod types;
 pub mod validate;
+pub mod admin;
 
-use soroban_sdk::{contract, contractimpl, Address, Env, String, Vec};
+use soroban_sdk::{contract, contractimpl, symbol_short, Address, Env, String, Vec};
 
 #[contract]
 pub struct NiffyInsure;
@@ -93,7 +94,13 @@ impl NiffyInsure {
     ) {
         let admin = storage::get_admin(&env);
         admin.require_auth();
+        storage::bump_instance(&env);
         claim::set_allowed_asset(&env, &asset, allowed);
+        // Emit event so indexers can track allowlist changes.
+        env.events().publish(
+            (symbol_short!("asset"), if allowed { symbol_short!("added") } else { symbol_short!("removed") }),
+            asset,
+        );
     }
 
     pub fn is_allowed_asset(env: Env, asset: Address) -> bool {
@@ -122,10 +129,6 @@ impl NiffyInsure {
         storage::has_policy(&env, &holder, policy_id)
     }
 
-    pub fn is_paused(env: Env) -> bool {
-        storage::is_paused(&env)
-    }
-
     pub fn get_voters(env: Env) -> Vec<Address> {
         storage::get_voters(&env)
     }
@@ -137,6 +140,9 @@ impl NiffyInsure {
     /// Authenticates the holder, computes premium, transfers payment,
     /// persists the policy, updates the DAO voter registry, and emits
     /// a versioned `PolicyInitiated` event for NestJS indexers.
+    ///
+    /// `asset` must be on the admin-controlled allowlist; it is bound to the
+    /// policy and used for both premium payment and future claim payouts.
     pub fn initiate_policy(
         env: Env,
         holder: Address,
@@ -145,8 +151,9 @@ impl NiffyInsure {
         coverage: i128,
         age: u32,
         risk_score: u32,
+        asset: Address,
     ) -> Result<types::Policy, policy::PolicyError> {
-        policy::initiate_policy(&env, holder, policy_type, region, coverage, age, risk_score)
+        policy::initiate_policy(&env, holder, policy_type, region, coverage, age, risk_score, asset)
     }
 
     /// Read-only: retrieve a persisted policy by (holder, policy_id).
@@ -202,6 +209,7 @@ impl NiffyInsure {
         end_ledger: u32,
     ) {
         use crate::types::{Policy, PolicyType, RegionTier};
+        let token = storage::get_token(&env);
         let policy = Policy {
             holder: holder.clone(),
             policy_id,
@@ -212,6 +220,7 @@ impl NiffyInsure {
             is_active: true,
             start_ledger: 1,
             end_ledger,
+            asset: token,
         };
         env.storage()
             .persistent()

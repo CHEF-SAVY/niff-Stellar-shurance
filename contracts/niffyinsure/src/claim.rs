@@ -17,8 +17,17 @@ pub fn process_claim(env: &Env, claim_id: u64) -> Result<(), Error> {
     if claim.amount <= 0 {
         return Err(Error::ClaimAmountZero);
     }
+
+    // Verify the claim's asset is still allowlisted (admin may have removed it).
     if !is_allowed_asset(env, &claim.asset) {
         return Err(Error::InvalidAsset);
+    }
+
+    // Verify the claim's asset matches the policy's bound asset.
+    if let Some(policy) = storage::get_policy(env, &claim.claimant, claim.policy_id) {
+        if claim.asset != policy.asset {
+            return Err(Error::InvalidAsset);
+        }
     }
 
     let token_client = token::Client::new(env, &claim.asset);

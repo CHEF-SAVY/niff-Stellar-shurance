@@ -14,6 +14,7 @@ export class PolicyService {
       coverage: BigInt(dto.coverage),
       age: dto.age,
       riskScore: dto.risk_score,
+      asset: dto.asset,
       startLedger: dto.start_ledger,
       durationLedgers: dto.duration_ledgers,
     });

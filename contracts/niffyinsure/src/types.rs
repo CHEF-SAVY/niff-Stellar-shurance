@@ -155,6 +155,9 @@ pub struct Policy {
     pub is_active: bool,
     pub start_ledger: u32,
     pub end_ledger: u32,
+    /// SEP-41 asset contract used for this policy's premium payment and claim payout.
+    /// Must be allowlisted at the time of policy initiation.
+    pub asset: Address,
 }
 
 #[contracttype]

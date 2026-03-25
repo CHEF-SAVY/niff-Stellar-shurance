@@ -2,8 +2,8 @@ use crate::{
     premium,
     storage,
     token,
-    types::{Policy, PolicyType, PremiumQuote, RegionTier},
-    validate,
+    types::{Policy, PolicyType, PremiumQuote, RegionTier, RiskInput},
+    validate::{self, Error},
 };
 use soroban_sdk::{contractevent, contracterror, contracttype, Address, Env, String};
 
@@ -51,6 +51,8 @@ pub enum PolicyError {
     InvalidAge = 108,
     /// Risk score out of range (1..=10).
     InvalidRiskScore = 109,
+    /// Supplied asset is not on the admin-controlled allowlist.
+    AssetNotAllowed = 110,
 }
 
 #[contracttype]
@@ -170,20 +172,22 @@ pub fn map_quote_error(env: &Env, err: Error) -> QuoteFailure {
 /// # Auth
 /// `holder.require_auth()` — only the policyholder may initiate.
 ///
+/// # Asset
+/// `asset` must be on the admin-controlled allowlist at call time.
+/// The asset is bound to the policy and used for both premium payment
+/// and future claim payouts — no cross-asset settlement in MVP.
+///
 /// # Flow
 /// 1. Check contract is not paused.
-/// 2. Authenticate the holder.
-/// 3. Validate inputs (age, risk_score, coverage).
-/// 4. Compute premium via `premium::compute_premium_checked`.
-/// 5. Allocate a unique per-holder `policy_id` (idempotent: if a client
-///    retries after a failed tx the counter is only bumped on success).
-/// 6. Transfer premium from holder → contract address.
-/// 7. Persist the `Policy` struct with `is_active = true`.
-/// 8. Update voter registry (add holder, increment active-policy count).
-/// 9. Emit versioned `PolicyInitiated` event for NestJS indexers.
-///
-/// All durable writes happen **after** the premium transfer so that a failed
-/// transfer leaves zero partial state (no policy, no voter entry).
+/// 2. Validate asset is allowlisted.
+/// 3. Authenticate the holder.
+/// 4. Validate inputs (age, risk_score, coverage).
+/// 5. Compute premium via `premium::compute_premium_checked`.
+/// 6. Allocate a unique per-holder `policy_id`.
+/// 7. Transfer premium from holder → contract address using the policy asset.
+/// 8. Persist the `Policy` struct with `is_active = true`.
+/// 9. Update voter registry.
+/// 10. Emit versioned `PolicyInitiated` event for NestJS indexers.
 pub fn initiate_policy(
     env: &Env,
     holder: Address,
@@ -192,16 +196,22 @@ pub fn initiate_policy(
     coverage: i128,
     age: u32,
     risk_score: u32,
+    asset: Address,
 ) -> Result<Policy, PolicyError> {
     // 1. Pause guard
     if storage::is_paused(env) {
         return Err(PolicyError::ContractPaused);
     }
 
-    // 2. Authenticate the holder
+    // 2. Asset allowlist check — before auth so callers get a clear error
+    if !storage::is_allowed_asset(env, &asset) {
+        return Err(PolicyError::AssetNotAllowed);
+    }
+
+    // 3. Authenticate the holder
     holder.require_auth();
 
-    // 3. Input validation
+    // 4. Input validation
     if age == 0 || age > 120 {
         return Err(PolicyError::InvalidAge);
     }
@@ -212,29 +222,25 @@ pub fn initiate_policy(
         return Err(PolicyError::InvalidCoverage);
     }
 
-    // 4. Compute premium (smallest units / stroops)
+    // 5. Compute premium (smallest units / stroops)
     let premium_amount = premium::compute_premium_checked(&policy_type, &region, age, risk_score)
         .ok_or(PolicyError::PremiumOverflow)?;
     if premium_amount <= 0 {
         return Err(PolicyError::InvalidPremium);
     }
 
-    // 5. Allocate unique per-holder policy_id
+    // 6. Allocate unique per-holder policy_id
     let policy_id = storage::next_policy_id(env, &holder);
 
-    // Enforce uniqueness (defensive — next_policy_id is monotonic, but guard
-    // against any future code path that might manually set an id).
     if storage::has_policy(env, &holder, policy_id) {
         return Err(PolicyError::DuplicatePolicyId);
     }
 
-    // 6. Premium transfer: holder → contract address
-    //    Done BEFORE any durable writes so failure leaves no partial state.
-    let token_addr = storage::get_token(env);
+    // 7. Premium transfer: holder → contract address using the policy's asset
     let contract_addr = env.current_contract_address();
-    token::transfer(env, &token_addr, &holder, &contract_addr, premium_amount);
+    token::transfer(env, &asset, &holder, &contract_addr, premium_amount);
 
-    // 7. Build and validate policy struct
+    // 8. Build and validate policy struct
     let current_ledger = env.ledger().sequence();
     let end_ledger = current_ledger
         .checked_add(POLICY_DURATION_LEDGERS)
@@ -250,24 +256,24 @@ pub fn initiate_policy(
         is_active: true,
         start_ledger: current_ledger,
         end_ledger,
+        asset: asset.clone(),
     };
 
-    // Run structural validation (coverage > 0, premium > 0, ledger window).
     validate::check_policy(&policy).map_err(|_| PolicyError::PolicyValidation)?;
 
-    // 8. Persist policy
+    // 9. Persist policy
     storage::set_policy(env, &holder, policy_id, &policy);
 
-    // 9. Update voter registry
+    // 10. Update voter registry
     storage::add_voter(env, &holder);
 
-    // 10. Emit versioned PolicyInitiated event
+    // 11. Emit versioned PolicyInitiated event
     PolicyInitiated {
         version: POLICY_EVENT_VERSION,
         policy_id,
         holder: holder.clone(),
         premium: premium_amount,
-        asset: token_addr,
+        asset: asset.clone(),
         policy_type,
         region,
         coverage,

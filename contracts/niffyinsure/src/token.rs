@@ -1,16 +1,16 @@
 /// Token interaction helpers.
 ///
 /// # Trust model
-/// Only the allowlisted token stored at DataKey::Token is used in payment paths.
-/// `transfer_from_contract` reads the stored address directly — no caller-supplied
-/// token address enters the payment path.
+/// Only allowlisted asset contract IDs may be used in payment paths.
+/// `transfer_from_contract` reads the policy's stored asset — no caller-supplied
+/// token address enters the payment path without an allowlist check upstream.
 /// See SECURITY.md for the full trust model and reentrancy analysis.
-use soroban_sdk::{panic_with_error, Address, Env};
+use soroban_sdk::{Address, Env};
 
-use crate::{admin::AdminError, storage};
+use crate::storage;
 
-/// Transfer `amount` of the allowlisted treasury token from this contract to `to`.
-/// Reads the token address from storage — no arbitrary token substitution possible.
+/// Transfer `amount` of the contract's default treasury token from this contract to `to`.
+/// Used for admin drain operations; reads the token address from storage.
 pub fn transfer_from_contract(env: &Env, to: &Address, amount: i128) {
     let token = storage::get_token(env);
     let from = env.current_contract_address();
@@ -18,12 +18,16 @@ pub fn transfer_from_contract(env: &Env, to: &Address, amount: i128) {
 }
 
 /// Low-level SEP-41 `transfer` invocation.
-/// Defence-in-depth: verifies `token` matches the stored allowlist.
-/// `pub(crate)` — external callers must use `transfer_from_contract`.
+///
+/// Defence-in-depth: verifies `token` is on the allowlist before invoking.
+/// Callers in the policy/claim path must have already validated the asset,
+/// but this provides a second layer of protection.
+/// `pub(crate)` — external callers must go through `transfer_from_contract`
+/// or the policy/claim modules which enforce allowlist checks.
 pub(crate) fn transfer(env: &Env, token: &Address, from: &Address, to: &Address, amount: i128) {
-    let allowed = storage::get_token(env);
-    if token != &allowed {
-        panic_with_error!(env, AdminError::InvalidAddress);
+    // Defence-in-depth: asset must be allowlisted.
+    if !storage::is_allowed_asset(env, token) {
+        panic!("token not allowlisted");
     }
     let args = soroban_sdk::vec![
         env,
