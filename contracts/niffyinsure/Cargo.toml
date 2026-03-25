@@ -9,24 +9,12 @@ publish = false
 crate-type = ["cdylib", "rlib"]
 
 [features]
-# ─────────────────────────────────────────────────────────────────────────────
-# WARNING: experimental features are NOT production-safe.
-#
-# The `experimental` feature enables oracle / parametric trigger infrastructure
-# that has NOT completed cryptographic review, game-theoretic analysis, or
-# legal/compliance assessment.  Do NOT enable this feature in production builds.
-#
-# Required before activation (see DESIGN-ORACLE.md):
-#   ✓ Complete cryptographic design review (signature schemes, replay protection)
-#   ✓ Game-theoretic analysis (oracle incentivization, sybil resistance)
-#   ✓ Legal & compliance review (regulatory classification of parametric triggers)
-#   ✓ Security audit by qualified Soroban smart contract auditors
-# ─────────────────────────────────────────────────────────────────────────────
-experimental = []
+# Enables test-only contract entrypoints (test_seed_policy, test_remove_voter).
+# Never enable in production WASM builds.
+testutils = ["soroban-sdk/testutils"]
 
 [dependencies]
 soroban-sdk = { version = "=23.5.3", features = [] }
 
 [dev-dependencies]
 soroban-sdk = { version = "=23.5.3", features = ["testutils"] }
-
