@@ -46,7 +46,6 @@ import { ConfigService } from '@nestjs/config';
 import {
   BASE_FEE,
   Contract,
-  SorobanRpc,
   TransactionBuilder,
   nativeToScVal,
   xdr,
@@ -54,6 +53,7 @@ import {
   Transaction,
   FeeBumpTransaction,
 } from '@stellar/stellar-sdk';
+import { rpc as SorobanRpc } from '@stellar/stellar-sdk';
 import { RedisService } from '../cache/redis.service';
 import { BuildTxDto, ContractFunctionEnum } from './dto/build-tx.dto';
 import { SubmitTxDto } from './dto/submit-tx.dto';
@@ -169,13 +169,12 @@ export class TxService {
 
     // simulate=true path: return resources without building the full envelope
     if (dto.simulate) {
-      const cost = successSim.cost;
       return {
         type: 'simulate',
         minResourceFee: successSim.minResourceFee ?? '0',
-        readBytes: cost?.readBytes ?? 0,
-        writeBytes: cost?.writeBytes ?? 0,
-        instructions: cost?.cpuInsns ? Number(cost.cpuInsns) : 0,
+        readBytes: 0,
+        writeBytes: 0,
+        instructions: 0,
         authRequirements,
         currentLedger: ledgerInfo.sequence,
       } satisfies SimulateOnlyResult;

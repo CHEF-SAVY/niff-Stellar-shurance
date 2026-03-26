@@ -1,13 +1,9 @@
-﻿use crate::{
-    calculator,
-    ledger,
-    premium,
-    storage,
-    token,
+use crate::{
+    ledger, premium, storage, token,
     types::{AgeBand, CoverageType, Policy, PolicyType, PremiumQuote, RegionTier, RiskInput},
     validate::{self, Error},
 };
-use soroban_sdk::{contractevent, contracterror, contracttype, symbol_short, Address, Env, String};
+use soroban_sdk::{contracterror, contractevent, contracttype, Address, Env, String};
 
 pub use ledger::QUOTE_TTL_LEDGERS;
 
@@ -73,6 +69,7 @@ pub struct PolicyInitiated {
 /// Event emitted by `renew_policy`.
 #[contractevent]
 #[derive(Clone, Debug)]
+#[allow(dead_code)]
 pub struct PolicyRenewed {
     #[topic]
     pub holder: Address,
@@ -127,14 +124,26 @@ pub fn map_quote_error(env: &Env, err: Error) -> QuoteFailure {
     let message = match err {
         Error::InvalidBaseAmount => "invalid base amount: expected > 0",
         Error::SafetyScoreOutOfRange => "invalid safety_score: expected 0..=100",
-        Error::InvalidConfigVersion => "invalid premium table version: expected a strictly newer version",
+        Error::InvalidConfigVersion => {
+            "invalid premium table version: expected a strictly newer version"
+        }
         Error::MissingRegionMultiplier => "premium table missing one or more region multipliers",
         Error::MissingAgeMultiplier => "premium table missing one or more age-band multipliers",
-        Error::MissingCoverageMultiplier => "premium table missing one or more coverage multipliers",
-        Error::RegionMultiplierOutOfBounds => "region multiplier out of bounds: expected 0.5000x..=5.0000x",
-        Error::AgeMultiplierOutOfBounds => "age-band multiplier out of bounds: expected 0.5000x..=5.0000x",
-        Error::CoverageMultiplierOutOfBounds => "coverage multiplier out of bounds: expected 0.5000x..=5.0000x",
-        Error::SafetyDiscountOutOfBounds => "safety discount out of bounds: expected 0.0000x..=0.5000x",
+        Error::MissingCoverageMultiplier => {
+            "premium table missing one or more coverage multipliers"
+        }
+        Error::RegionMultiplierOutOfBounds => {
+            "region multiplier out of bounds: expected 0.5000x..=5.0000x"
+        }
+        Error::AgeMultiplierOutOfBounds => {
+            "age-band multiplier out of bounds: expected 0.5000x..=5.0000x"
+        }
+        Error::CoverageMultiplierOutOfBounds => {
+            "coverage multiplier out of bounds: expected 0.5000x..=5.0000x"
+        }
+        Error::SafetyDiscountOutOfBounds => {
+            "safety discount out of bounds: expected 0.0000x..=0.5000x"
+        }
         Error::Overflow => "pricing arithmetic overflow: reduce base amount or multiplier values",
         Error::DivideByZero => "pricing divide by zero: check configured scaling factors",
         Error::InvalidQuoteTtl => "quote ttl misconfigured: contact support",
@@ -144,13 +153,18 @@ pub fn map_quote_error(env: &Env, err: Error) -> QuoteFailure {
         Error::InsufficientTreasury => "treasury balance is insufficient for the approved payout",
         Error::AlreadyPaid => "claim payout already executed",
         Error::ClaimNotApproved => "claim must be approved before payout",
+        Error::DuplicateOpenClaim => "an open claim already exists for this policy",
         Error::ZeroCoverage => "policy coverage must be greater than zero",
         Error::ZeroPremium => "policy premium must be greater than zero",
-        Error::InvalidLedgerWindow => "invalid ledger window: end_ledger must be greater than start_ledger",
+        Error::InvalidLedgerWindow => {
+            "invalid ledger window: end_ledger must be greater than start_ledger"
+        }
         Error::PolicyExpired => "policy is expired",
         Error::PolicyInactive => "policy is inactive",
         Error::ClaimAmountZero => "claim amount must be greater than zero",
         Error::ClaimExceedsCoverage => "claim amount exceeds policy coverage",
+        Error::PolicyNotFound => "policy not found",
+        Error::ExcessiveEvidenceBytes => "claim evidence payload exceeds the configured size limit",
         Error::DetailsTooLong => "claim details exceed maximum length",
         Error::TooManyImageUrls => "too many image URLs supplied",
         Error::ImageUrlTooLong => "image URL exceeds maximum length",
@@ -177,6 +191,7 @@ pub fn map_quote_error(env: &Env, err: Error) -> QuoteFailure {
 /// `asset` must be on the admin-controlled allowlist at call time.
 /// The asset is bound to the policy and used for both premium payment
 /// and future claim payouts — no cross-asset settlement in MVP.
+#[allow(clippy::too_many_arguments)]
 pub fn initiate_policy(
     env: &Env,
     holder: Address,
@@ -213,12 +228,15 @@ pub fn initiate_policy(
     }
 
     // Compute premium via the calculator (external or local fallback).
-    let quote = crate::calculator::compute_quote(env, &input, base_amount, false, QUOTE_TTL_LEDGERS)
-        .map_err(|e| match e {
-            validate::Error::CalculatorPaused => PolicyError::ContractPaused,
-            validate::Error::CalculatorCallFailed | validate::Error::CalculatorNotSet => PolicyError::PremiumOverflow,
-            _ => PolicyError::PremiumOverflow,
-        })?;
+    let quote =
+        crate::calculator::compute_quote(env, &input, base_amount, false, QUOTE_TTL_LEDGERS)
+            .map_err(|e| match e {
+                validate::Error::CalculatorPaused => PolicyError::ContractPaused,
+                validate::Error::CalculatorCallFailed | validate::Error::CalculatorNotSet => {
+                    PolicyError::PremiumOverflow
+                }
+                _ => PolicyError::PremiumOverflow,
+            })?;
     let premium_amount = quote.total_premium;
     if premium_amount <= 0 {
         return Err(PolicyError::InvalidPremium);
@@ -251,6 +269,9 @@ pub fn initiate_policy(
         start_ledger: current_ledger,
         end_ledger,
         asset: asset.clone(),
+        terminated_at_ledger: 0,
+        termination_reason: crate::types::TerminationReason::None,
+        terminated_by_admin: false,
     };
 
     validate::check_policy(&policy).map_err(|_| PolicyError::PolicyValidation)?;

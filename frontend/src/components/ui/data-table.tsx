@@ -13,7 +13,7 @@ import { cn } from '@/lib/utils'
 interface Column<T> {
   key: keyof T
   label: string
-  render?: (value: any, row: T) => React.ReactNode
+  render?: (value: T[keyof T], row: T) => React.ReactNode
   className?: string
 }
 

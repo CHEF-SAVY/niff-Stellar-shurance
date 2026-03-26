@@ -37,6 +37,25 @@ export class RedisUnavailableError extends Error {
 }
 
 let _client: Redis | null = null;
+const isTestEnv = process.env.NODE_ENV === "test";
+
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error("timeout")), ms);
+    timer.unref();
+
+    promise.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (error: unknown) => {
+        clearTimeout(timer);
+        reject(error);
+      }
+    );
+  });
+}
 
 /**
  * Returns the shared ioredis client, creating it on first call.
@@ -57,22 +76,30 @@ export function getRedisClient(): Redis {
     keyPrefix: cfg.keyPrefix,
     maxRetriesPerRequest: cfg.maxRetriesPerRequest,
     // Reconnect with exponential backoff, capped at 10 s
-    retryStrategy: (times: number) => Math.min(times * 200, 10_000),
+    retryStrategy: isTestEnv
+      ? () => null
+      : (times: number) => Math.min(times * 200, 10_000),
     lazyConnect: true,
     enableOfflineQueue: false, // surface errors immediately rather than queuing
   });
 
   _client.on("error", (err: Error) => {
     // Log but do not crash — individual callers decide fail-open vs fail-closed
-    console.error("[redis] connection error:", err.message);
+    if (!isTestEnv) {
+      console.error("[redis] connection error:", err.message);
+    }
   });
 
   _client.on("connect", () => {
-    console.info("[redis] connected");
+    if (!isTestEnv) {
+      console.info("[redis] connected");
+    }
   });
 
   _client.on("reconnecting", () => {
-    console.warn("[redis] reconnecting…");
+    if (!isTestEnv) {
+      console.warn("[redis] reconnecting…");
+    }
   });
 
   return _client;
@@ -111,12 +138,7 @@ export async function checkRedisHealth(): Promise<boolean> {
     if (client.status === "wait" || client.status === "close") {
       await client.connect();
     }
-    const result = await Promise.race([
-      client.ping(),
-      new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error("timeout")), 2_000)
-      ),
-    ]);
+    const result = await withTimeout(client.ping(), 2_000);
     return result === "PONG";
   } catch {
     return false;
@@ -126,7 +148,14 @@ export async function checkRedisHealth(): Promise<boolean> {
 /** Gracefully closes the shared client. Call on process shutdown. */
 export async function closeRedisClient(): Promise<void> {
   if (_client) {
-    await _client.quit();
-    _client = null;
+    try {
+      if (_client.status === "ready") {
+        await _client.quit();
+      } else {
+        _client.disconnect();
+      }
+    } finally {
+      _client = null;
+    }
   }
 }

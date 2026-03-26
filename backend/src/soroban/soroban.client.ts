@@ -13,13 +13,13 @@ import {
   Account,
   BASE_FEE,
   Contract,
-  SorobanRpc,
   TransactionBuilder,
   nativeToScVal,
   scValToNative,
   xdr,
   Address,
 } from '@stellar/stellar-sdk';
+import { rpc as SorobanRpc } from '@stellar/stellar-sdk';
 import { config } from '../config/env';
 import { AppError } from '../middleware/errorHandler';
 

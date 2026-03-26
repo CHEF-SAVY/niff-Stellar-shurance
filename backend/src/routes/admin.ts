@@ -1,6 +1,6 @@
 import { Router, Response, NextFunction, Request } from 'express';
 import { authenticate } from '../middleware/auth';
-import { requireRole, requireAdmin, requireSupportReadonly, requirePermission } from '../middleware/role';
+import { requireAdmin, requireSupportReadonly, requirePermission } from '../middleware/role';
 import { AuthenticatedRequest } from '../types';
 import userService from '../services/user';
 

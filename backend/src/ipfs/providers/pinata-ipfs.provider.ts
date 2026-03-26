@@ -123,7 +123,7 @@ export class PinataIpfsProvider implements IpfsProvider {
           maxBodyLength: Infinity,
           maxContentLength: Infinity,
           // Transform request data for proper multipart encoding
-          transformRequest: [(data) => {
+          transformRequest: [() => {
             const chunks: Buffer[] = [];
             
             // File part

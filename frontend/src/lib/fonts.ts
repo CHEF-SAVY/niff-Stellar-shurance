@@ -1,17 +1,9 @@
-import { Inter, IBM_Plex_Mono } from 'next/font/google'
+// Font CSS variables are defined in globals.css, so the app can build
+// without fetching Google Fonts during `next build`.
+export const inter = {
+  variable: '',
+}
 
-export const inter = Inter({
-  subsets: ['latin'],
-  variable: '--font-inter',
-  display: 'swap',
-  weight: ['400', '500', '600', '700'],
-  preload: true,
-})
-
-export const ibmPlexMono = IBM_Plex_Mono({
-  subsets: ['latin'],
-  variable: '--font-ibm-mono',
-  display: 'swap',
-  weight: ['400', '500'],
-  preload: false,
-})
+export const ibmPlexMono = {
+  variable: '',
+}

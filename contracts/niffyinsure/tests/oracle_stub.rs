@@ -14,7 +14,7 @@
 //! the requirements in DESIGN-ORACLE.md.
 //! ═══════════════════════════════════════════════════════════════════════════
 
-#![cfg(test)]
+#![cfg(all(test, feature = "experimental"))]
 
 use niffyinsure::types::{OracleSource, TriggerStatus};
 use niffyinsure::validate::OracleError;
@@ -242,7 +242,10 @@ mod experimental_build_tests {
         };
 
         let result = niffyinsure::validate::check_oracle_trigger(&env, &trigger, 1000, 100);
-        assert_eq!(result, Err(niffyinsure::validate::OracleError::OracleDisabled));
+        assert_eq!(
+            result,
+            Err(niffyinsure::validate::OracleError::OracleDisabled)
+        );
     }
 
     /// Test that check_oracle_trigger rejects expired triggers.
@@ -260,13 +263,16 @@ mod experimental_build_tests {
             source: niffyinsure::types::OracleSource::Undefined,
             payload: SdkVec::new(&env),
             timestamp: 0,
-            trigger_ledger: 100,    // Old ledger
+            trigger_ledger: 100, // Old ledger
             signature: SdkVec::new(&env),
         };
 
         // Current ledger is much later than trigger ledger
         let result = niffyinsure::validate::check_oracle_trigger(&env, &trigger, 10000, 100);
-        assert_eq!(result, Err(niffyinsure::validate::OracleError::TriggerLedgerExpired));
+        assert_eq!(
+            result,
+            Err(niffyinsure::validate::OracleError::TriggerLedgerExpired)
+        );
     }
 
     /// Test that check_oracle_trigger rejects non-empty signatures (crypto not implemented).
@@ -294,7 +300,10 @@ mod experimental_build_tests {
         };
 
         let result = niffyinsure::validate::check_oracle_trigger(&env, &trigger, 1000, 100);
-        assert_eq!(result, Err(niffyinsure::validate::OracleError::SignatureNotImplemented));
+        assert_eq!(
+            result,
+            Err(niffyinsure::validate::OracleError::SignatureNotImplemented)
+        );
     }
 
     /// Test that check_trigger_status_transition allows valid transitions.
@@ -304,31 +313,36 @@ mod experimental_build_tests {
         assert!(niffyinsure::validate::check_trigger_status_transition(
             TriggerStatus::Pending,
             TriggerStatus::Validated
-        ).is_ok());
+        )
+        .is_ok());
 
         // Pending -> Rejected (valid)
         assert!(niffyinsure::validate::check_trigger_status_transition(
             TriggerStatus::Pending,
             TriggerStatus::Rejected
-        ).is_ok());
+        )
+        .is_ok());
 
         // Pending -> Expired (valid)
         assert!(niffyinsure::validate::check_trigger_status_transition(
             TriggerStatus::Pending,
             TriggerStatus::Expired
-        ).is_ok());
+        )
+        .is_ok());
 
         // Validated -> Executed (valid)
         assert!(niffyinsure::validate::check_trigger_status_transition(
             TriggerStatus::Validated,
             TriggerStatus::Executed
-        ).is_ok());
+        )
+        .is_ok());
 
         // Same state is idempotent (valid)
         assert!(niffyinsure::validate::check_trigger_status_transition(
             TriggerStatus::Pending,
             TriggerStatus::Pending
-        ).is_ok());
+        )
+        .is_ok());
     }
 
     /// Test that check_trigger_status_transition rejects invalid transitions.
@@ -400,7 +414,10 @@ mod experimental_build_tests {
 
         // This should fail because source is Undefined, not because payload is empty
         let result = niffyinsure::validate::check_oracle_trigger(&env, &trigger, 1000, 100);
-        assert_eq!(result, Err(niffyinsure::validate::OracleError::SourceNotWhitelisted));
+        assert_eq!(
+            result,
+            Err(niffyinsure::validate::OracleError::SourceNotWhitelisted)
+        );
     }
 }
 

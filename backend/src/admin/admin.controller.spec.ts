@@ -1,5 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { ForbiddenException } from '@nestjs/common';
+import { ExecutionContext, ForbiddenException } from '@nestjs/common';
+import { Request } from 'express';
 import { AdminController } from './admin.controller';
 import { AdminService } from './admin.service';
 import { AuditService } from './audit.service';
@@ -10,6 +11,10 @@ const mockAdminService = { enqueueReindex: jest.fn(), setFeatureFlag: jest.fn(),
 const mockAuditService = { write: jest.fn(), findAll: jest.fn() };
 
 const adminReq = (role = 'admin') => ({ user: { walletAddress: 'GADMIN', role }, ip: '127.0.0.1' });
+const toExecutionContext = (role?: string): ExecutionContext =>
+  ({
+    switchToHttp: () => ({ getRequest: () => (role ? { user: { role } } : {}) }),
+  }) as unknown as ExecutionContext;
 
 describe('AdminController', () => {
   let controller: AdminController;
@@ -24,7 +29,7 @@ describe('AdminController', () => {
       ],
     })
       .overrideGuard(JwtAuthGuard).useValue({ canActivate: () => true })
-      .overrideGuard(AdminRoleGuard).useValue({ canActivate: (ctx: any) => {
+      .overrideGuard(AdminRoleGuard).useValue({ canActivate: (ctx: ExecutionContext) => {
         const role = ctx.switchToHttp().getRequest().user?.role;
         if (role !== 'admin') throw new ForbiddenException('Admin role required');
         return true;
@@ -37,7 +42,7 @@ describe('AdminController', () => {
   describe('POST /admin/reindex', () => {
     it('enqueues job and writes audit row', async () => {
       mockAdminService.enqueueReindex.mockResolvedValue('job-123');
-      const result = await controller.reindex({ fromLedger: 500 }, adminReq() as any);
+      const result = await controller.reindex({ fromLedger: 500 }, adminReq() as unknown as Request);
       expect(result).toEqual({ jobId: 'job-123', fromLedger: 500, status: 'queued' });
       expect(mockAdminService.enqueueReindex).toHaveBeenCalledWith(500);
       expect(mockAuditService.write).toHaveBeenCalledWith(
@@ -59,7 +64,7 @@ describe('AdminController', () => {
     it('updates flag and writes audit row', async () => {
       const flag = { key: 'claims_enabled', enabled: false, updatedBy: 'GADMIN' };
       mockAdminService.setFeatureFlag.mockResolvedValue(flag);
-      const result = await controller.setFeatureFlag('claims_enabled', { enabled: false }, adminReq() as any);
+      const result = await controller.setFeatureFlag('claims_enabled', { enabled: false }, adminReq() as unknown as Request);
       expect(result).toEqual(flag);
       expect(mockAuditService.write).toHaveBeenCalledWith(
         expect.objectContaining({ action: 'feature_flag_update', payload: expect.objectContaining({ key: 'claims_enabled', enabled: false }) }),
@@ -70,25 +75,19 @@ describe('AdminController', () => {
   describe('Role guard — non-admin access denied', () => {
     it('throws ForbiddenException for support_readonly on reindex', async () => {
       const guard = new AdminRoleGuard();
-      const ctx = {
-        switchToHttp: () => ({ getRequest: () => ({ user: { role: 'support_readonly' } }) }),
-      } as any;
+      const ctx = toExecutionContext('support_readonly');
       expect(() => guard.canActivate(ctx)).toThrow(ForbiddenException);
     });
 
     it('throws ForbiddenException when no user present', async () => {
       const guard = new AdminRoleGuard();
-      const ctx = {
-        switchToHttp: () => ({ getRequest: () => ({}) }),
-      } as any;
+      const ctx = toExecutionContext();
       expect(() => guard.canActivate(ctx)).toThrow(ForbiddenException);
     });
 
     it('allows admin role through', () => {
       const guard = new AdminRoleGuard();
-      const ctx = {
-        switchToHttp: () => ({ getRequest: () => ({ user: { role: 'admin' } }) }),
-      } as any;
+      const ctx = toExecutionContext('admin');
       expect(guard.canActivate(ctx)).toBe(true);
     });
   });

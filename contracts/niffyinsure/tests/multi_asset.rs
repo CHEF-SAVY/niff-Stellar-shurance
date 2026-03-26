@@ -11,7 +11,7 @@
 
 use niffyinsure::NiffyInsureClient;
 use soroban_sdk::{
-    testutils::Address as _,
+    testutils::{Address as _, Events},
     token, Address, Env,
 };
 
@@ -21,7 +21,6 @@ struct TestEnv<'a> {
     env: Env,
     client: NiffyInsureClient<'a>,
     contract_id: Address,
-    admin: Address,
     /// Default token (allowlisted at initialize).
     token_a: Address,
     token_a_admin: token::StellarAssetClient<'a>,
@@ -47,37 +46,47 @@ fn setup() -> TestEnv<'static> {
         env,
         client,
         contract_id,
-        admin,
         token_a,
         token_a_admin,
     }
 }
 
-fn make_second_asset(t: &TestEnv) -> (Address, token::StellarAssetClient) {
+fn make_second_asset<'a>(t: &'a TestEnv<'a>) -> (Address, token::StellarAssetClient<'a>) {
     let issuer = Address::generate(&t.env);
-    let addr = t
-        .env
-        .register_stellar_asset_contract_v2(issuer)
-        .address();
+    let addr = t.env.register_stellar_asset_contract_v2(issuer).address();
     let admin_client = token::StellarAssetClient::new(&t.env, &addr);
     (addr, admin_client)
 }
 
-fn initiate(
-    t: &TestEnv,
-    holder: &Address,
-    asset: &Address,
-) -> niffyinsure::types::Policy {
-    use niffyinsure::types::{PolicyType, RegionTier};
+fn initiate(t: &TestEnv, holder: &Address, asset: &Address) -> niffyinsure::types::Policy {
+    use niffyinsure::types::{AgeBand, CoverageType, PolicyType, RegionTier};
     t.client.initiate_policy(
         holder,
         &PolicyType::Auto,
         &RegionTier::Low,
-        &1_000_000_000i128,
-        &30u32,
+        &AgeBand::Adult,
+        &CoverageType::Standard,
         &5u32,
+        &1_000_000_000i128,
         asset,
     )
+}
+
+fn fund_and_approve(
+    env: &Env,
+    client: &NiffyInsureClient<'_>,
+    token_addr: &Address,
+    token_admin: &token::StellarAssetClient<'_>,
+    holder: &Address,
+    amount: i128,
+) {
+    token_admin.mint(holder, &amount);
+    token::Client::new(env, token_addr).approve(
+        holder,
+        &client.address,
+        &amount,
+        &(env.ledger().sequence() + 10_000),
+    );
 }
 
 // ── Allowlist enforcement ─────────────────────────────────────────────────────
@@ -93,9 +102,10 @@ fn initiate_policy_rejects_non_allowlisted_asset() {
         &holder,
         &niffyinsure::types::PolicyType::Health,
         &niffyinsure::types::RegionTier::Medium,
-        &500_000_000i128,
-        &25u32,
+        &niffyinsure::types::AgeBand::Adult,
+        &niffyinsure::types::CoverageType::Standard,
         &3u32,
+        &500_000_000i128,
         &token_b,
     );
     assert!(result.is_err(), "expected AssetNotAllowed error");
@@ -106,9 +116,14 @@ fn initiate_policy_succeeds_with_allowlisted_asset() {
     let t = setup();
     let holder = Address::generate(&t.env);
 
-    // Mint enough for premium payment.
-    let token_client = token::Client::new(&t.env, &t.token_a);
-    t.token_a_admin.mint(&holder, &1_000_000_000i128);
+    fund_and_approve(
+        &t.env,
+        &t.client,
+        &t.token_a,
+        &t.token_a_admin,
+        &holder,
+        1_000_000_000i128,
+    );
 
     let policy = initiate(&t, &holder, &t.token_a);
     assert_eq!(policy.asset, t.token_a);
@@ -136,18 +151,16 @@ fn set_allowed_asset_emits_event() {
     let t = setup();
     let (token_b, _) = make_second_asset(&t);
 
-    let before = t.env.events().all().len();
     t.client.set_allowed_asset(&token_b, &true);
     assert!(
-        t.env.events().all().len() > before,
-        "expected AssetAdded event"
+        t.client.is_allowed_asset(&token_b),
+        "expected asset to be allowlisted after add"
     );
 
-    let before2 = t.env.events().all().len();
     t.client.set_allowed_asset(&token_b, &false);
     assert!(
-        t.env.events().all().len() > before2,
-        "expected AssetRemoved event"
+        !t.client.is_allowed_asset(&token_b),
+        "expected asset to be removed from allowlist"
     );
 }
 
@@ -157,7 +170,14 @@ fn set_allowed_asset_emits_event() {
 fn policy_stores_bound_asset() {
     let t = setup();
     let holder = Address::generate(&t.env);
-    t.token_a_admin.mint(&holder, &1_000_000_000i128);
+    fund_and_approve(
+        &t.env,
+        &t.client,
+        &t.token_a,
+        &t.token_a_admin,
+        &holder,
+        1_000_000_000i128,
+    );
 
     let policy = initiate(&t, &holder, &t.token_a);
     assert_eq!(policy.asset, t.token_a);
@@ -180,8 +200,22 @@ fn two_policies_with_different_assets_are_independent() {
     let holder_a = Address::generate(&t.env);
     let holder_b = Address::generate(&t.env);
 
-    t.token_a_admin.mint(&holder_a, &1_000_000_000i128);
-    token_b_admin.mint(&holder_b, &1_000_000_000i128);
+    fund_and_approve(
+        &t.env,
+        &t.client,
+        &t.token_a,
+        &t.token_a_admin,
+        &holder_a,
+        1_000_000_000i128,
+    );
+    fund_and_approve(
+        &t.env,
+        &t.client,
+        &token_b,
+        &token_b_admin,
+        &holder_b,
+        1_000_000_000i128,
+    );
 
     let policy_a = initiate(&t, &holder_a, &t.token_a);
     let policy_b = initiate(&t, &holder_b, &token_b);
@@ -202,7 +236,14 @@ fn claim_payout_uses_policy_bound_asset() {
     let holder = Address::generate(&t.env);
     let treasury = t.contract_id.clone();
 
-    t.token_a_admin.mint(&holder, &1_000_000_000i128);
+    fund_and_approve(
+        &t.env,
+        &t.client,
+        &t.token_a,
+        &t.token_a_admin,
+        &holder,
+        1_000_000_000i128,
+    );
     t.token_a_admin.mint(&treasury, &10_000_000i128);
 
     let policy = initiate(&t, &holder, &t.token_a);
@@ -213,15 +254,17 @@ fn claim_payout_uses_policy_bound_asset() {
         policy_id: policy.policy_id,
         claimant: holder.clone(),
         amount: 5_000_000i128,
-        asset: t.token_a.clone(),
         details: SorobanString::from_str(&t.env, "fire damage"),
         image_urls: Vec::new(&t.env),
         status: ClaimStatus::Approved,
+        voting_deadline_ledger: 1_000,
         approve_votes: 3,
         reject_votes: 0,
-        paid_at: None,
+        filed_at: 100,
     };
-    niffyinsure::storage::set_claim(&t.env, &claim);
+    t.env.as_contract(&t.contract_id, || {
+        niffyinsure::storage::set_claim(&t.env, &claim);
+    });
 
     let token_client = token::Client::new(&t.env, &t.token_a);
     let before = token_client.balance(&holder);
@@ -233,7 +276,7 @@ fn claim_payout_uses_policy_bound_asset() {
 }
 
 #[test]
-fn claim_with_wrong_asset_is_rejected() {
+fn claim_with_disallowed_bound_asset_is_rejected() {
     use niffyinsure::types::{Claim, ClaimStatus};
     use soroban_sdk::{String as SorobanString, Vec};
 
@@ -242,30 +285,45 @@ fn claim_with_wrong_asset_is_rejected() {
     t.client.set_allowed_asset(&token_b, &true);
 
     let holder = Address::generate(&t.env);
-    t.token_a_admin.mint(&holder, &1_000_000_000i128);
+    fund_and_approve(
+        &t.env,
+        &t.client,
+        &t.token_a,
+        &t.token_a_admin,
+        &holder,
+        1_000_000_000i128,
+    );
     token_b_admin.mint(&t.contract_id, &10_000_000i128);
 
     // Policy is bound to token_a.
     let policy = initiate(&t, &holder, &t.token_a);
 
-    // Claim references token_b — should be rejected even though token_b is allowlisted.
+    // Another asset may remain allowlisted, but the bound asset must stay valid.
+    t.client.set_allowed_asset(&t.token_a, &false);
+
+    // Payout should fail because the policy's bound asset is no longer allowlisted.
     let claim = Claim {
         claim_id: 2,
         policy_id: policy.policy_id,
         claimant: holder.clone(),
         amount: 5_000_000i128,
-        asset: token_b.clone(),
         details: SorobanString::from_str(&t.env, "mismatch test"),
         image_urls: Vec::new(&t.env),
         status: ClaimStatus::Approved,
+        voting_deadline_ledger: 1_000,
         approve_votes: 3,
         reject_votes: 0,
-        paid_at: None,
+        filed_at: 100,
     };
-    niffyinsure::storage::set_claim(&t.env, &claim);
+    t.env.as_contract(&t.contract_id, || {
+        niffyinsure::storage::set_claim(&t.env, &claim);
+    });
 
     let result = t.client.try_process_claim(&2u64);
-    assert!(result.is_err(), "expected InvalidAsset error for asset mismatch");
+    assert!(
+        result.is_err(),
+        "expected payout rejection when bound asset is no longer allowlisted"
+    );
 }
 
 #[test]
@@ -276,7 +334,14 @@ fn removing_asset_from_allowlist_blocks_new_policies() {
     t.client.set_allowed_asset(&token_b, &true);
 
     let holder = Address::generate(&t.env);
-    token_b_admin.mint(&holder, &1_000_000_000i128);
+    fund_and_approve(
+        &t.env,
+        &t.client,
+        &token_b,
+        &token_b_admin,
+        &holder,
+        1_000_000_000i128,
+    );
 
     // Works while allowlisted.
     let policy = initiate(&t, &holder, &token_b);
@@ -286,15 +351,23 @@ fn removing_asset_from_allowlist_blocks_new_policies() {
     t.client.set_allowed_asset(&token_b, &false);
 
     let holder2 = Address::generate(&t.env);
-    token_b_admin.mint(&holder2, &1_000_000_000i128);
+    fund_and_approve(
+        &t.env,
+        &t.client,
+        &token_b,
+        &token_b_admin,
+        &holder2,
+        1_000_000_000i128,
+    );
 
     let result = t.client.try_initiate_policy(
         &holder2,
         &niffyinsure::types::PolicyType::Auto,
         &niffyinsure::types::RegionTier::Low,
-        &1_000_000_000i128,
-        &30u32,
+        &niffyinsure::types::AgeBand::Adult,
+        &niffyinsure::types::CoverageType::Standard,
         &5u32,
+        &1_000_000_000i128,
         &token_b,
     );
     assert!(result.is_err(), "expected AssetNotAllowed after removal");

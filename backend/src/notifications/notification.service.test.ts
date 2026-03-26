@@ -5,7 +5,7 @@
  * Verifies: successful send, retry behaviour, opt-out, and idempotency.
  */
 
-import type { ClaimFinalizedEvent } from './notification.types';
+import type { ClaimFinalizedEvent, NotificationRecord } from './notification.types';
 import {
   sendClaimNotifications,
   getPreferences,
@@ -63,7 +63,7 @@ describe('sendClaimNotifications', () => {
 
       const result = await sendClaimNotifications(EVENT);
 
-      const emailRecord = result.records.find((r) => r.channel === 'email');
+      const emailRecord = result.records.find((r: NotificationRecord) => r.channel === 'email');
       expect(emailRecord?.status).toBe('sent');
       expect(sent).toHaveLength(1);
     });
@@ -83,7 +83,7 @@ describe('sendClaimNotifications', () => {
 
       const result = await sendClaimNotifications(EVENT);
 
-      const emailRecord = result.records.find((r) => r.channel === 'email');
+      const emailRecord = result.records.find((r: NotificationRecord) => r.channel === 'email');
       expect(emailRecord?.status).toBe('skipped');
       expect(sent).toHaveLength(0);
     });
@@ -110,7 +110,7 @@ describe('sendClaimNotifications', () => {
 
       expect(sent).toHaveLength(firstCount); // no additional sends
       const records = (await sendClaimNotifications(EVENT)).records;
-      const emailRecord = records.find((r) => r.channel === 'email');
+      const emailRecord = records.find((r: NotificationRecord) => r.channel === 'email');
       expect(emailRecord?.status).toBe('skipped');
     });
   });
@@ -130,7 +130,7 @@ describe('sendClaimNotifications', () => {
 
       const result = await sendClaimNotifications(EVENT);
 
-      const emailRecord = result.records.find((r) => r.channel === 'email');
+      const emailRecord = result.records.find((r: NotificationRecord) => r.channel === 'email');
       expect(emailRecord?.status).toBe('failed');
       expect(emailRecord?.error).toContain('SMTP');
     }, 10_000);
@@ -151,7 +151,7 @@ describe('sendClaimNotifications', () => {
 
       const result = await sendClaimNotifications(EVENT);
 
-      const emailRecord = result.records.find((r) => r.channel === 'email');
+      const emailRecord = result.records.find((r: NotificationRecord) => r.channel === 'email');
       expect(emailRecord?.status).toBe('skipped');
       expect(sent).toHaveLength(0);
     });

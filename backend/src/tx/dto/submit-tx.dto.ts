@@ -22,7 +22,7 @@ export class SubmitTxDto {
   @Matches(/^[A-Za-z0-9+/]+=*$/, {
     message: 'signed_xdr must be a valid base64 string',
   })
-  signed_xdr: string;
+  signed_xdr!: string;
 
   @ApiPropertyOptional({
     description:

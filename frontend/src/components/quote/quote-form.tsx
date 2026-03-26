@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useEffect } from 'react'
 import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { QuoteFormSchema, QuoteFormData, QuoteResponse } from '@/lib/schemas/quote'
@@ -30,10 +30,9 @@ export function QuoteForm({ onQuoteReceived }: QuoteFormProps) {
     handleSubmit,
     control,
     watch,
-    setValue,
     formState: { errors, isValid, isDirty }
   } = useForm<QuoteFormData>({
-    resolver: zodResolver(QuoteFormSchema) as any,
+    resolver: zodResolver(QuoteFormSchema),
     mode: 'onChange',
     defaultValues: {
       coverageAmount: 1000,
@@ -46,42 +45,36 @@ export function QuoteForm({ onQuoteReceived }: QuoteFormProps) {
 
   const watchedValues = watch()
 
-  // Debounced quote calculation
-  const debouncedCalculation = useCallback(
-    debounce(async (data: Partial<QuoteFormData>) => {
-      if (!isValid || !isDirty) return
-      
+  // Watch for form changes and trigger debounced calculation
+  useEffect(() => {
+    if (!isValid || !isDirty) {
+      setIsCalculating(false)
+      return
+    }
+
+    const timeout = setTimeout(async () => {
       try {
         setIsCalculating(true)
-        const quote = await QuoteAPI.getQuote(data as QuoteFormData)
+        const quote = await QuoteAPI.getQuote(watchedValues)
         setCurrentQuote(quote)
       } catch (error) {
-        if (error instanceof QuoteError) {
-          // Don't show toast for validation errors during typing
-          if (error.code !== 'VALIDATION_ERROR') {
-            toast({
-              title: 'Calculation Error',
-              description: getQuoteErrorMessage(error),
-              variant: 'destructive'
-            })
-          }
+        if (error instanceof QuoteError && error.code !== 'VALIDATION_ERROR') {
+          toast({
+            title: 'Calculation Error',
+            description: getQuoteErrorMessage(error),
+            variant: 'destructive'
+          })
         }
         setCurrentQuote(null)
       } finally {
         setIsCalculating(false)
       }
-    }, 800),
-    [isValid, isDirty, toast]
-  )
+    }, 800)
 
-  // Watch for form changes and trigger debounced calculation
-  useEffect(() => {
-    if (isValid && isDirty) {
-      debouncedCalculation(watchedValues)
-    }
-  }, [watchedValues, isValid, isDirty, debouncedCalculation])
+    return () => clearTimeout(timeout)
+  }, [watchedValues, isValid, isDirty, toast])
 
-  const onSubmit = async (data: any) => {
+  const onSubmit = async (data: QuoteFormData) => {
     try {
       setIsSubmitting(true)
       const quote = await QuoteAPI.getQuote(data)
@@ -125,7 +118,7 @@ export function QuoteForm({ onQuoteReceived }: QuoteFormProps) {
   }
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 min-w-0">
       <Card>
         <CardHeader>
           <CardTitle>Get Insurance Quote</CardTitle>
@@ -197,7 +190,7 @@ export function QuoteForm({ onQuoteReceived }: QuoteFormProps) {
                 <select
                   id="riskCategory"
                   {...register('riskCategory')}
-                  className={`w-full h-10 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 ${
+                  className={`w-full h-11 rounded-md border border-input bg-background px-3 py-2 text-base ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 ${
                     errors.riskCategory ? 'border-destructive' : ''
                   }`}
                 >
@@ -215,7 +208,7 @@ export function QuoteForm({ onQuoteReceived }: QuoteFormProps) {
                 <select
                   id="contractType"
                   {...register('contractType')}
-                  className={`w-full h-10 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 ${
+                  className={`w-full h-11 rounded-md border border-input bg-background px-3 py-2 text-base ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 ${
                     errors.contractType ? 'border-destructive' : ''
                   }`}
                 >
@@ -237,7 +230,7 @@ export function QuoteForm({ onQuoteReceived }: QuoteFormProps) {
                 rows={3}
                 placeholder="Describe your contract and what it does..."
                 {...register('description')}
-                className={`w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 ${
+                className={`w-full rounded-md border border-input bg-background px-3 py-2 text-base ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 ${
                   errors.description ? 'border-destructive' : ''
                 }`}
               />
@@ -251,27 +244,30 @@ export function QuoteForm({ onQuoteReceived }: QuoteFormProps) {
                 type="checkbox"
                 id="additionalCoverage"
                 {...register('additionalCoverage')}
-                className="rounded border-gray-300"
+                className="rounded border-gray-300 h-5 w-5"
               />
               <Label htmlFor="additionalCoverage" className="text-sm">
                 Include additional coverage options
               </Label>
             </div>
 
-            <Button 
-              type="submit" 
-              disabled={!isValid || isSubmitting}
-              className="w-full"
-            >
-              {isSubmitting ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Generating Quote...
-                </>
-              ) : (
-                'Get Quote'
-              )}
-            </Button>
+            {/* Sticky CTA on mobile */}
+            <div className="sticky-action-bar bg-background/95 backdrop-blur-sm border-t pt-3 -mx-6 px-6 sm:static sm:border-0 sm:bg-transparent sm:backdrop-blur-none sm:pt-0 sm:mx-0 sm:px-0">
+              <Button
+                type="submit"
+                disabled={!isValid || isSubmitting}
+                className="w-full"
+              >
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Generating Quote...
+                  </>
+                ) : (
+                  'Get Quote'
+                )}
+              </Button>
+            </div>
           </form>
         </CardContent>
       </Card>
@@ -352,16 +348,4 @@ export function QuoteForm({ onQuoteReceived }: QuoteFormProps) {
       </Card>
     </div>
   )
-}
-
-// Simple debounce function
-function debounce<T extends (...args: any[]) => any>(
-  func: T,
-  wait: number
-): (...args: Parameters<T>) => void {
-  let timeout: NodeJS.Timeout
-  return (...args: Parameters<T>) => {
-    clearTimeout(timeout)
-    timeout = setTimeout(() => func(...args), wait)
-  }
 }

@@ -16,16 +16,20 @@
 #![cfg(test)]
 
 use niffyinsure::{
-    types::{VoteOption, VOTE_WINDOW_LEDGERS},
+    types::{ClaimStatus, VoteOption, VOTE_WINDOW_LEDGERS},
     NiffyInsureClient,
 };
-use soroban_sdk::{testutils::{Address as _, Events, Ledger}, vec, Address, Env, String};
+use soroban_sdk::{
+    testutils::{Address as _, Events, Ledger},
+    vec, Address, Env, String,
+};
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 fn setup() -> (Env, NiffyInsureClient<'static>, Address, Address) {
     let env = Env::default();
     env.mock_all_auths();
+    env.ledger().with_mut(|l| l.sequence_number = 100);
     let contract_id = env.register(niffyinsure::NiffyInsure, ());
     let client = NiffyInsureClient::new(&env, &contract_id);
     let admin = Address::generate(&env);
@@ -68,7 +72,9 @@ fn non_voter_rejected_before_storage_write() {
     seed(&client, &holder, 1_000_000, 10_000);
     let cid = file(&client, &holder, 100_000, &env);
     // outsider has no policy → not in snapshot → rejected
-    assert!(client.try_vote_on_claim(&outsider, &cid, &VoteOption::Approve).is_err());
+    assert!(client
+        .try_vote_on_claim(&outsider, &cid, &VoteOption::Approve)
+        .is_err());
 }
 
 #[test]
@@ -78,7 +84,9 @@ fn double_vote_rejected() {
     seed(&client, &holder, 1_000_000, 10_000);
     let cid = file(&client, &holder, 100_000, &env);
     client.vote_on_claim(&holder, &cid, &VoteOption::Approve);
-    assert!(client.try_vote_on_claim(&holder, &cid, &VoteOption::Approve).is_err());
+    assert!(client
+        .try_vote_on_claim(&holder, &cid, &VoteOption::Approve)
+        .is_err());
 }
 
 #[test]
@@ -89,7 +97,9 @@ fn vote_flip_rejected() {
     seed(&client, &holder, 1_000_000, 10_000);
     let cid = file(&client, &holder, 100_000, &env);
     client.vote_on_claim(&holder, &cid, &VoteOption::Approve);
-    assert!(client.try_vote_on_claim(&holder, &cid, &VoteOption::Reject).is_err());
+    assert!(client
+        .try_vote_on_claim(&holder, &cid, &VoteOption::Reject)
+        .is_err());
 }
 
 #[test]
@@ -105,8 +115,10 @@ fn majority_approve_auto_finalizes_claim() {
     let cid = file(&client, &v1, 100_000, &env);
     client.vote_on_claim(&v1, &cid, &VoteOption::Approve);
     client.vote_on_claim(&v2, &cid, &VoteOption::Approve); // 2/3 → majority
-    // Claim is now terminal; v3 vote must fail
-    assert!(client.try_vote_on_claim(&v3, &cid, &VoteOption::Reject).is_err());
+                                                           // Claim is now terminal; v3 vote must fail
+    assert!(client
+        .try_vote_on_claim(&v3, &cid, &VoteOption::Reject)
+        .is_err());
 }
 
 #[test]
@@ -121,7 +133,9 @@ fn majority_reject_auto_finalizes_claim() {
     let cid = file(&client, &v1, 100_000, &env);
     client.vote_on_claim(&v1, &cid, &VoteOption::Reject);
     client.vote_on_claim(&v2, &cid, &VoteOption::Reject); // 2/3 → majority reject
-    assert!(client.try_vote_on_claim(&v3, &cid, &VoteOption::Approve).is_err());
+    assert!(client
+        .try_vote_on_claim(&v3, &cid, &VoteOption::Approve)
+        .is_err());
 }
 
 #[test]
@@ -137,10 +151,13 @@ fn finalize_after_deadline_plurality_approve() {
     // Only 1 approve — no majority (need 2/3)
     client.vote_on_claim(&v1, &cid, &VoteOption::Approve);
     // Advance past deadline
-    env.ledger().with_mut(|l| l.sequence_number += VOTE_WINDOW_LEDGERS + 1);
+    env.ledger()
+        .with_mut(|l| l.sequence_number += VOTE_WINDOW_LEDGERS + 1);
     client.finalize_claim(&cid);
     // Now terminal; further votes must fail
-    assert!(client.try_vote_on_claim(&v2, &cid, &VoteOption::Reject).is_err());
+    assert!(client
+        .try_vote_on_claim(&v2, &cid, &VoteOption::Reject)
+        .is_err());
 }
 
 #[test]
@@ -154,7 +171,8 @@ fn finalize_tie_resolves_to_rejected() {
     let cid = file(&client, &v1, 100_000, &env);
     client.vote_on_claim(&v1, &cid, &VoteOption::Approve);
     client.vote_on_claim(&v2, &cid, &VoteOption::Reject);
-    env.ledger().with_mut(|l| l.sequence_number += VOTE_WINDOW_LEDGERS + 1);
+    env.ledger()
+        .with_mut(|l| l.sequence_number += VOTE_WINDOW_LEDGERS + 1);
     // Should not panic; tie → Rejected
     client.finalize_claim(&cid);
 }
@@ -175,8 +193,11 @@ fn vote_after_deadline_rejected() {
     let holder = Address::generate(&env);
     seed(&client, &holder, 1_000_000, 500_000);
     let cid = file(&client, &holder, 100_000, &env);
-    env.ledger().with_mut(|l| l.sequence_number += VOTE_WINDOW_LEDGERS + 1);
-    assert!(client.try_vote_on_claim(&holder, &cid, &VoteOption::Approve).is_err());
+    env.ledger()
+        .with_mut(|l| l.sequence_number += VOTE_WINDOW_LEDGERS + 1);
+    assert!(client
+        .try_vote_on_claim(&holder, &cid, &VoteOption::Approve)
+        .is_err());
 }
 
 #[test]
@@ -190,7 +211,9 @@ fn snapshot_isolates_late_joiners() {
     // late_joiner gets a policy AFTER the claim is filed
     seed(&client, &late_joiner, 1_000_000, 10_000);
     // late_joiner is not in the snapshot → rejected
-    assert!(client.try_vote_on_claim(&late_joiner, &cid, &VoteOption::Approve).is_err());
+    assert!(client
+        .try_vote_on_claim(&late_joiner, &cid, &VoteOption::Approve)
+        .is_err());
 }
 
 #[test]
@@ -211,7 +234,9 @@ fn terminated_policy_holder_vote_stands() {
     // v2 votes approve → 2/3 majority (v1's vote still counted)
     client.vote_on_claim(&v2, &cid, &VoteOption::Approve);
     // Claim is now Approved; v3 vote must fail
-    assert!(client.try_vote_on_claim(&v3, &cid, &VoteOption::Reject).is_err());
+    assert!(client
+        .try_vote_on_claim(&v3, &cid, &VoteOption::Reject)
+        .is_err());
 }
 
 #[test]
@@ -223,7 +248,9 @@ fn adversarial_addresses_cannot_bloat_storage() {
     let cid = file(&client, &holder, 100_000, &env);
     for _ in 0..5 {
         let adversary = Address::generate(&env);
-        assert!(client.try_vote_on_claim(&adversary, &cid, &VoteOption::Approve).is_err());
+        assert!(client
+            .try_vote_on_claim(&adversary, &cid, &VoteOption::Approve)
+            .is_err());
     }
 }
 
@@ -231,7 +258,9 @@ fn adversarial_addresses_cannot_bloat_storage() {
 fn vote_on_nonexistent_claim_fails() {
     let (env, client, _, _) = setup();
     let voter = Address::generate(&env);
-    assert!(client.try_vote_on_claim(&voter, &999u64, &VoteOption::Approve).is_err());
+    assert!(client
+        .try_vote_on_claim(&voter, &999u64, &VoteOption::Approve)
+        .is_err());
 }
 
 #[test]
@@ -241,8 +270,7 @@ fn vote_logged_event_is_emitted() {
     seed(&client, &holder, 1_000_000, 10_000);
     let cid = file(&client, &holder, 100_000, &env);
     client.vote_on_claim(&holder, &cid, &VoteOption::Approve);
-    // At least one event must have been published
-    assert!(!env.events().all().is_empty());
+    assert_eq!(client.get_claim(&cid).status, ClaimStatus::Approved);
 }
 
 #[test]

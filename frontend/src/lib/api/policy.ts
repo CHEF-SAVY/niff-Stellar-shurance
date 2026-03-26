@@ -1,5 +1,4 @@
 import { PolicyInitiationData, Transaction, Policy, PolicyError as PolicyErrorType } from '@/lib/schemas/policy'
-import { QuoteResponse } from '@/lib/schemas/quote'
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'
 
@@ -74,7 +73,7 @@ export class PolicyError extends Error {
   constructor(
     public code: string,
     message: string,
-    public details?: Record<string, any>
+    public details?: Record<string, unknown>
   ) {
     super(message)
     this.name = 'PolicyError'

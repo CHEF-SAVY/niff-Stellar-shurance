@@ -1,15 +1,16 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useForm, Controller } from 'react-hook-form'
+import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { PolicyInitiationSchema, PolicyInitiationData, Transaction, Policy } from '@/lib/schemas/policy'
 import { PolicyAPI, PolicyError, getPolicyErrorMessage, getExplorerUrl } from '@/lib/api/policy'
-import { QuoteAPI } from '@/lib/api/quote'
+import { QuoteAPI, QuoteError, getQuoteErrorMessage } from '@/lib/api/quote'
+import type { QuoteResponse } from '@/lib/schemas/quote'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Stepper, StepContent, type Step } from '@/components/ui/stepper'
@@ -21,9 +22,7 @@ import {
   Copy, 
   ExternalLink,
   Wallet,
-  FileText,
-  Shield,
-  Check
+  Shield
 } from 'lucide-react'
 import { useSearchParams } from 'next/navigation'
 
@@ -37,7 +36,7 @@ export function PolicyInitiation({ quoteId: propQuoteId }: PolicyInitiationProps
   const quoteId = propQuoteId || searchParams.get('quoteId') || ''
   
   const [currentStep, setCurrentStep] = useState(0)
-  const [quote, setQuote] = useState<any>(null)
+  const [quote, setQuote] = useState<QuoteResponse | null>(null)
   const [transaction, setTransaction] = useState<Transaction | null>(null)
   const [policy, setPolicy] = useState<Policy | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -48,20 +47,16 @@ export function PolicyInitiation({ quoteId: propQuoteId }: PolicyInitiationProps
   const {
     register,
     handleSubmit,
-    control,
     formState: { errors, isValid },
     setValue,
-    watch
   } = useForm<PolicyInitiationData>({
-    resolver: zodResolver(PolicyInitiationSchema) as any,
+    resolver: zodResolver(PolicyInitiationSchema),
     defaultValues: {
       quoteId,
       walletAddress: '',
       acceptTerms: false,
     }
   })
-
-  const acceptTerms = watch('acceptTerms')
 
   const steps: Step[] = [
     {
@@ -92,25 +87,25 @@ export function PolicyInitiation({ quoteId: propQuoteId }: PolicyInitiationProps
 
   useEffect(() => {
     if (quoteId) {
-      loadQuote()
-    }
-  }, [quoteId])
-
-  const loadQuote = async () => {
-    try {
-      const quoteData = await QuoteAPI.getQuoteById(quoteId)
-      setQuote(quoteData)
-      setCurrentStep(1)
-    } catch (error) {
-      if (error instanceof PolicyError) {
-        toast({
-          title: 'Quote Error',
-          description: getPolicyErrorMessage(error),
-          variant: 'destructive'
-        })
+      const loadQuote = async () => {
+        try {
+          const quoteData = await QuoteAPI.getQuoteById(quoteId)
+          setQuote(quoteData)
+          setCurrentStep(1)
+        } catch (error) {
+          if (error instanceof QuoteError) {
+            toast({
+              title: 'Quote Error',
+              description: getQuoteErrorMessage(error),
+              variant: 'destructive'
+            })
+          }
+        }
       }
+
+      void loadQuote()
     }
-  }
+  }, [quoteId, toast])
 
   const connectWallet = async () => {
     try {
@@ -125,7 +120,7 @@ export function PolicyInitiation({ quoteId: propQuoteId }: PolicyInitiationProps
         title: 'Wallet Connected',
         description: 'Your Stellar wallet has been connected successfully',
       })
-    } catch (error) {
+    } catch {
       toast({
         title: 'Connection Error',
         description: 'Failed to connect wallet. Please try again.',
@@ -341,7 +336,7 @@ export function PolicyInitiation({ quoteId: propQuoteId }: PolicyInitiationProps
                       type="checkbox"
                       id="acceptTerms"
                       {...register('acceptTerms')}
-                      className="rounded border-gray-300"
+                      className="rounded border-gray-300 h-5 w-5"
                     />
                     <Label htmlFor="acceptTerms" className="text-sm">
                       I accept the terms and conditions and understand the risks
@@ -373,20 +368,23 @@ export function PolicyInitiation({ quoteId: propQuoteId }: PolicyInitiationProps
                   </div>
                 </div>
 
-                <Button 
-                  type="submit" 
-                  disabled={!isValid || isSubmitting}
-                  className="w-full"
-                >
-                  {isSubmitting ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Initiating Policy...
-                    </>
-                  ) : (
-                    'Initiate Policy'
-                  )}
-                </Button>
+                {/* Sticky CTA on mobile */}
+                <div className="sticky-action-bar bg-background/95 backdrop-blur-sm border-t pt-3 -mx-6 px-6 sm:static sm:border-0 sm:bg-transparent sm:backdrop-blur-none sm:pt-0 sm:mx-0 sm:px-0">
+                  <Button
+                    type="submit"
+                    disabled={!isValid || isSubmitting}
+                    className="w-full"
+                  >
+                    {isSubmitting ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Initiating Policy...
+                      </>
+                    ) : (
+                      'Initiate Policy'
+                    )}
+                  </Button>
+                </div>
               </form>
             </div>
           </StepContent>

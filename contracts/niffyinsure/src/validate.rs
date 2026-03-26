@@ -1,9 +1,11 @@
 use soroban_sdk::{contracterror, Env, String, Vec};
 
 use crate::types::{
-    Claim, MultiplierTable, Policy, RiskInput, SAFETY_SCORE_MAX, DETAILS_MAX_LEN, IMAGE_URLS_MAX,
-    IMAGE_URL_MAX_LEN, REASON_MAX_LEN,
+    Claim, MultiplierTable, Policy, RiskInput, DETAILS_MAX_LEN, IMAGE_URLS_MAX, IMAGE_URL_MAX_LEN,
+    REASON_MAX_LEN, SAFETY_SCORE_MAX,
 };
+#[cfg(feature = "experimental")]
+use crate::types::{OracleSource, OracleTrigger, TriggerEventType, TriggerStatus};
 
 #[contracterror]
 #[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
@@ -44,6 +46,13 @@ pub enum Error {
     DuplicateOpenClaim = 33,
     ExcessiveEvidenceBytes = 34,
     PolicyNotFound = 35,
+    CalculatorNotSet = 36,
+    CalculatorCallFailed = 37,
+    CalculatorPaused = 38,
+    VotingWindowClosed = 39,
+    VotingWindowStillOpen = 40,
+    NotEligibleVoter = 41,
+    RateLimitExceeded = 42,
 }
 
 pub fn check_policy(policy: &Policy) -> Result<(), Error> {
@@ -110,7 +119,6 @@ pub fn check_claim_open(claim: &Claim) -> Result<(), Error> {
     }
     Ok(())
 }
-
 
 // ═════════════════════════════════════════════════════════════════════════════
 // ORACLE / PARAMETRIC TRIGGER VALIDATION
@@ -226,7 +234,6 @@ pub fn check_oracle_trigger(
     }
 
     // 6. Check source is defined
-    use crate::types::OracleSource;
     if matches!(trigger.source, OracleSource::Undefined) {
         return Err(OracleError::SourceNotWhitelisted);
     }
@@ -333,4 +340,3 @@ pub fn check_multiplier_table_shape(table: &MultiplierTable) -> Result<(), Error
     }
     Ok(())
 }
-

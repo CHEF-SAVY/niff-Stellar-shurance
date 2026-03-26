@@ -3,10 +3,14 @@
  * 
  * Tests for the IPFS upload endpoint using a mock provider.
  */
+
+
+
+
 import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import request from 'supertest';
-import { IpfsModule, IPFS_PROVIDER } from '../../src/ipfs/ipfs.module';
+import { IpfsModule } from '../../src/ipfs/ipfs.module';
 import { ConfigModule } from '@nestjs/config';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { APP_GUARD } from '@nestjs/core';

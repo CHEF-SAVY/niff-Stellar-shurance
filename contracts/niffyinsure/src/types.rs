@@ -1,4 +1,4 @@
-use soroban_sdk::{contracttype, Address, Map, String, Vec};
+use soroban_sdk::{contractevent, contracttype, Address, Bytes, Map, String, Vec};
 
 // ── Field size limits ─────────────────────────────────────────────────────────
 pub const DETAILS_MAX_LEN: u32 = 256;
@@ -16,9 +16,9 @@ pub const SAFETY_SCORE_MAX: u32 = 100;
 // Conversion: 1 ledger ≈ 5 s on Stellar Mainnet (Protocol 20+).
 // See: https://developers.stellar.org/docs/learn/fundamentals/stellar-consensus-protocol
 pub use crate::ledger::{
-    LEDGERS_PER_DAY, LEDGERS_PER_HOUR, LEDGERS_PER_MIN, LEDGERS_PER_WEEK,
-    POLICY_DURATION_LEDGERS, QUOTE_TTL_LEDGERS, RATE_LIMIT_WINDOW_LEDGERS,
-    RENEWAL_WINDOW_LEDGERS, SECS_PER_LEDGER, VOTE_WINDOW_LEDGERS,
+    LEDGERS_PER_DAY, LEDGERS_PER_HOUR, LEDGERS_PER_MIN, LEDGERS_PER_WEEK, POLICY_DURATION_LEDGERS,
+    QUOTE_TTL_LEDGERS, RATE_LIMIT_WINDOW_LEDGERS, RENEWAL_WINDOW_LEDGERS, SECS_PER_LEDGER,
+    VOTE_WINDOW_LEDGERS,
 };
 
 // ── Enums ─────────────────────────────────────────────────────────────────────
@@ -73,7 +73,10 @@ pub enum ClaimStatus {
 
 impl ClaimStatus {
     pub fn is_terminal(&self) -> bool {
-        matches!(self, ClaimStatus::Approved | ClaimStatus::Paid | ClaimStatus::Rejected)
+        matches!(
+            self,
+            ClaimStatus::Approved | ClaimStatus::Paid | ClaimStatus::Rejected
+        )
     }
 }
 
@@ -118,15 +121,16 @@ pub struct MultiplierTable {
     pub version: u32,
 }
 
-#[contracttype]
+#[contractevent(topics = ["niffyinsure", "premium_table_updated"])]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PremiumTableUpdated {
     pub version: u32,
 }
 
-#[contracttype]
+#[contractevent(topics = ["niffyinsure", "claim_paid"])]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ClaimProcessed {
+    #[topic]
     pub claim_id: u64,
     pub recipient: Address,
     pub amount: i128,
@@ -220,7 +224,6 @@ pub struct PremiumQuote {
 ///   - Oracle key rotation mechanism
 ///   - Sybil resistance (how to prevent fake oracles)
 ///   - Collusion detection
-#[cfg(feature = "experimental")]
 #[contracttype]
 #[derive(Clone, PartialEq, Debug)]
 pub enum OracleSource {
@@ -243,7 +246,6 @@ pub enum OracleSource {
 ///   - How are oracles incentivized to report truthfully?
 ///   - What slash conditions exist for malicious reports?
 ///   - How is consensus achieved for ambiguous events (e.g., "storm damage")?
-#[cfg(feature = "experimental")]
 #[contracttype]
 #[derive(Clone, PartialEq, Debug)]
 pub enum TriggerEventType {
@@ -282,7 +284,7 @@ pub struct OracleTrigger {
     pub source: OracleSource,
     /// Event-specific payload (schema depends on event_type).
     /// Must be validated against event_type schema before use.
-    pub payload: Vec<u8>,
+    pub payload: Bytes,
     /// Unix timestamp when the oracle attested this event.
     pub timestamp: u64,
     /// Ledger sequence when this trigger was recorded.
@@ -296,7 +298,20 @@ pub struct OracleTrigger {
     ///
     /// DO NOT PARSE: This field may contain arbitrary data that could
     /// trigger parsing vulnerabilities if interpreted without validation.
-    pub signature: Vec<u8>,
+    pub signature: Bytes,
+}
+
+#[cfg(not(feature = "experimental"))]
+#[contracttype]
+#[derive(Clone)]
+pub struct OracleTrigger {
+    pub policy_id: u32,
+    pub event_type: TriggerEventType,
+    pub source: OracleSource,
+    pub payload: Bytes,
+    pub timestamp: u64,
+    pub trigger_ledger: u32,
+    pub signature: Bytes,
 }
 
 /// Status of an oracle trigger in the resolution pipeline.
@@ -313,6 +328,17 @@ pub enum TriggerStatus {
     /// Trigger executed (payout initiated).
     Executed,
     /// Trigger expired (TTL exceeded).
+    Expired,
+}
+
+#[cfg(not(feature = "experimental"))]
+#[contracttype]
+#[derive(Clone, PartialEq, Debug)]
+pub enum TriggerStatus {
+    Pending,
+    Validated,
+    Rejected,
+    Executed,
     Expired,
 }
 
@@ -340,5 +366,16 @@ pub struct ParametricClaim {
     /// Status of the parametric resolution.
     pub status: TriggerStatus,
     /// Block height when resolution occurred.
+    pub resolved_ledger: u32,
+}
+
+#[cfg(not(feature = "experimental"))]
+#[contracttype]
+#[derive(Clone)]
+pub struct ParametricClaim {
+    pub claim_id: u64,
+    pub trigger_id: u64,
+    pub amount: i128,
+    pub status: TriggerStatus,
     pub resolved_ledger: u32,
 }

@@ -1,4 +1,4 @@
-import { Injectable, NestMiddleware, Logger } from '@nestjs/common';
+import { Injectable, NestMiddleware } from '@nestjs/common';
 import { Request, Response, NextFunction } from 'express';
 import { createLogger, format, transports } from 'winston';
 import { ConfigService } from '@nestjs/config';
@@ -84,4 +84,3 @@ export class LoggerMiddleware implements NestMiddleware {
     return `req_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
   }
 }
-

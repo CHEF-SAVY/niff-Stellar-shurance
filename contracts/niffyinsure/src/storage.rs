@@ -1,4 +1,4 @@
-﻿use soroban_sdk::{contracttype, Address, Env, Vec};
+use soroban_sdk::{contracttype, Address, Env, Vec};
 
 use crate::types::{Claim, MultiplierTable, Policy, VoteOption};
 
@@ -44,11 +44,16 @@ pub enum DataKey {
 // ── Instance bump ─────────────────────────────────────────────────────────────
 
 pub fn has_open_claim(env: &Env, holder: &Address, policy_id: u32) -> bool {
-    env.storage().instance().get(&DataKey::OpenClaim(holder.clone(), policy_id)).unwrap_or(false)
+    env.storage()
+        .instance()
+        .get(&DataKey::OpenClaim(holder.clone(), policy_id))
+        .unwrap_or(false)
 }
 
 pub fn set_open_claim(env: &Env, holder: &Address, policy_id: u32, open: bool) {
-    env.storage().instance().set(&DataKey::OpenClaim(holder.clone(), policy_id), &open);
+    env.storage()
+        .instance()
+        .set(&DataKey::OpenClaim(holder.clone(), policy_id), &open);
 }
 
 /// Extend instance storage TTL so admin/token/counters are never evicted.
@@ -73,7 +78,9 @@ pub fn get_admin(env: &Env) -> Address {
 }
 
 pub fn set_pending_admin(env: &Env, pending: &Address) {
-    env.storage().instance().set(&DataKey::PendingAdmin, pending);
+    env.storage()
+        .instance()
+        .set(&DataKey::PendingAdmin, pending);
 }
 
 pub fn get_pending_admin(env: &Env) -> Option<Address> {
@@ -162,19 +169,10 @@ pub fn is_allowed_asset(env: &Env, asset: &Address) -> bool {
 /// Pause flags: separate controls for binding new policies vs filing claims.
 /// Both false by default (unpaused state).
 #[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct PauseFlags {
     pub bind_paused: bool,
     pub claims_paused: bool,
-}
-
-impl Default for PauseFlags {
-    fn default() -> Self {
-        Self {
-            bind_paused: false,
-            claims_paused: false,
-        }
-    }
 }
 
 /// Central assertion: panics if ANY pause flag is set.
@@ -282,6 +280,37 @@ pub fn add_voter(env: &Env, holder: &Address) {
     env.storage().instance().set(&key, &(count + 1));
 }
 
+pub fn increment_holder_active_policies(env: &Env, holder: &Address) {
+    let key = DataKey::ActivePolicyCount(holder.clone());
+    let count: u32 = env.storage().instance().get(&key).unwrap_or(0);
+    env.storage().instance().set(&key, &(count + 1));
+}
+
+pub fn decrement_holder_active_policies(env: &Env, holder: &Address) {
+    let key = DataKey::ActivePolicyCount(holder.clone());
+    let next = get_active_policy_count(env, holder).saturating_sub(1);
+    env.storage().instance().set(&key, &next);
+}
+
+pub fn get_holder_active_policy_count(env: &Env, holder: &Address) -> u32 {
+    get_active_policy_count(env, holder)
+}
+
+pub fn voters_ensure_holder(env: &Env, holder: &Address) {
+    let mut voters = get_voters(env);
+    let mut found = false;
+    for v in voters.iter() {
+        if v == *holder {
+            found = true;
+            break;
+        }
+    }
+    if !found {
+        voters.push_back(holder.clone());
+        set_voters(env, &voters);
+    }
+}
+
 /// Removes `holder` from the voter list (no-op if absent).
 pub fn remove_voter(env: &Env, holder: &Address) {
     let voters = get_voters(env);
@@ -294,12 +323,24 @@ pub fn remove_voter(env: &Env, holder: &Address) {
     set_voters(env, &updated);
 }
 
+pub fn voters_remove_holder(env: &Env, holder: &Address) {
+    remove_voter(env, holder);
+}
+
 /// Returns the number of active policies for `holder` (vote weight).
 pub fn get_active_policy_count(env: &Env, holder: &Address) -> u32 {
     env.storage()
         .instance()
         .get(&DataKey::ActivePolicyCount(holder.clone()))
         .unwrap_or(0)
+}
+
+pub fn get_open_claim_count(env: &Env, holder: &Address, policy_id: u32) -> u32 {
+    if has_open_claim(env, holder, policy_id) {
+        1
+    } else {
+        0
+    }
 }
 
 // ── Policy counter (persistent) ───────────────────────────────────────────────

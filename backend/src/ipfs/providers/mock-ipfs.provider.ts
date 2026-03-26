@@ -32,8 +32,9 @@ export class MockIpfsProvider implements IpfsProvider {
     buffer: Buffer,
     filename: string,
     mimeType: string,
-    _options?: Record<string, unknown>,
+    options?: Record<string, unknown>,
   ): Promise<IpfsUploadResult> {
+    void options;
     // Simulate network latency
     await new Promise((resolve) => setTimeout(resolve, 100));
 

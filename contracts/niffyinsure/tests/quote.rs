@@ -1,7 +1,7 @@
 #![cfg(test)]
 
 use niffyinsure::{
-    types::{AgeBand, CoverageType, RiskInput, RegionTier},
+    types::{AgeBand, CoverageType, RegionTier, RiskInput},
     validate::Error,
     NiffyInsureClient,
 };

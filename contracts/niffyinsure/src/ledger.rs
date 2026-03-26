@@ -103,6 +103,7 @@ pub fn is_within_window(now: u32, start: u32, end: u32) -> bool {
 
 /// Returns `true` if the window `[start, end)` has not yet started.
 #[inline]
+#[allow(dead_code)]
 pub fn is_before_window(now: u32, start: u32) -> bool {
     now < start
 }
@@ -121,6 +122,7 @@ pub fn is_expired(now: u32, end: u32) -> bool {
 /// including) the expiry ledger.  Attempting to renew at or after `end` is
 /// rejected — the policy has already lapsed.
 #[inline]
+#[allow(dead_code)]
 pub fn is_in_renewal_window(now: u32, end: u32, window: u32) -> bool {
     let renewal_start = end.saturating_sub(window);
     is_within_window(now, renewal_start, end)
@@ -154,6 +156,7 @@ pub fn is_rate_limit_elapsed(now: u32, last_filed_at: u32, rate_limit_window: u3
 
 /// Ledgers remaining until `end` from `now`.  Returns 0 if already expired.
 #[inline]
+#[allow(dead_code)]
 pub fn ledgers_remaining(now: u32, end: u32) -> u32 {
     end.saturating_sub(now)
 }
@@ -163,6 +166,7 @@ pub fn ledgers_remaining(now: u32, end: u32) -> u32 {
 /// Multiply `ledgers_remaining` by `SECS_PER_LEDGER`.  The result may drift
 /// by ±20% from wall-clock time depending on network conditions.
 #[inline]
+#[allow(dead_code)]
 pub fn approx_secs_remaining(now: u32, end: u32) -> u32 {
     ledgers_remaining(now, end).saturating_mul(SECS_PER_LEDGER)
 }

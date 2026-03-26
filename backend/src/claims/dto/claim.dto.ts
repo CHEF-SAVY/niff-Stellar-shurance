@@ -16,7 +16,7 @@ export class ClaimMetadataDto {
 
   @ApiProperty({ description: 'Current claim status' })
   @Expose()
-  status!: 'pending' | 'approved' | 'rejected';
+  status!: 'pending' | 'approved' | 'paid' | 'rejected';
 
   @ApiProperty({ description: 'Claim amount requested' })
   @Expose()

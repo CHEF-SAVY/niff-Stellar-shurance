@@ -1,10 +1,11 @@
 import { Injectable } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 
 export interface AuditMeta {
   actor: string;
   action: string;
-  payload: Record<string, unknown>;
+  payload: Prisma.InputJsonObject;
   ipAddress?: string;
 }
 

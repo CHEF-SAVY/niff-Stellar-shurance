@@ -2,10 +2,10 @@
 
 use niffyinsure::{
     premium::{
-        checked_div, checked_mul_ratio, compute_premium, default_multiplier_table, round_to_multiple,
-        Rounding, MAX_MULTIPLIER, MIN_MULTIPLIER,
+        checked_div, checked_mul_ratio, compute_premium, default_multiplier_table,
+        round_to_multiple, Rounding, MAX_MULTIPLIER, MIN_MULTIPLIER,
     },
-    types::{AgeBand, CoverageType, MultiplierTable, RiskInput, RegionTier},
+    types::{AgeBand, CoverageType, MultiplierTable, RegionTier, RiskInput},
     validate::Error,
     NiffyInsureClient,
 };
@@ -65,12 +65,7 @@ fn make_table(
 fn pure_compute_premium_matches_expected_rounding_order() {
     let env = Env::default();
     let table = default_multiplier_table(&env);
-    let input = risk_input(
-        RegionTier::High,
-        AgeBand::Young,
-        CoverageType::Premium,
-        80,
-    );
+    let input = risk_input(RegionTier::High, AgeBand::Young, CoverageType::Premium, 80);
 
     let computation = compute_premium(&input, 12_345_678, &table).unwrap();
 
@@ -83,8 +78,14 @@ fn pure_compute_premium_matches_expected_rounding_order() {
 
 #[test]
 fn rounding_helpers_are_explicit() {
-    assert_eq!(round_to_multiple(10_001, 100, Rounding::Floor).unwrap(), 10_000);
-    assert_eq!(round_to_multiple(10_001, 100, Rounding::Ceil).unwrap(), 10_100);
+    assert_eq!(
+        round_to_multiple(10_001, 100, Rounding::Floor).unwrap(),
+        10_000
+    );
+    assert_eq!(
+        round_to_multiple(10_001, 100, Rounding::Ceil).unwrap(),
+        10_100
+    );
     assert_eq!(
         checked_mul_ratio(12_345_678, 13_500, 10_000, Rounding::Ceil).unwrap(),
         16_666_666
@@ -115,19 +116,21 @@ fn extreme_inputs_do_not_wrap_and_overflow_is_reported() {
         100,
     );
 
+    // The engine applies three staged multipliers. A base amount can be
+    // small enough for the first `amount * MAX_MULTIPLIER` and still overflow
+    // on later stages, so we test obviously safe and obviously overflowing
+    // ranges rather than a single stale cutoff.
+    for base in [1i128, 10_000_000i128, i128::MAX / 2_000_000] {
+        assert!(compute_premium(&input, base, &table).is_ok());
+    }
+
     for base in [
-        1i128,
-        10_000_000i128,
+        i128::MAX / 100_000,
         i128::MAX / MAX_MULTIPLIER,
         (i128::MAX / MAX_MULTIPLIER) + 1,
         i128::MAX,
     ] {
-        let result = compute_premium(&input, base, &table);
-        if base <= i128::MAX / MAX_MULTIPLIER {
-            assert!(result.is_ok());
-        } else {
-            assert_eq!(result, Err(Error::Overflow));
-        }
+        assert_eq!(compute_premium(&input, base, &table), Err(Error::Overflow));
     }
 }
 
@@ -202,14 +205,7 @@ fn stale_version_updates_are_rejected() {
     client.initialize(&admin, &token);
 
     let current = client.get_multiplier_table();
-    let stale = make_table(
-        &env,
-        10_000,
-        10_000,
-        10_000,
-        1_000,
-        current.version,
-    );
+    let stale = make_table(&env, 10_000, 10_000, 10_000, 1_000, current.version);
 
     let result = client.try_update_multiplier_table(&stale);
     assert!(result.is_err());

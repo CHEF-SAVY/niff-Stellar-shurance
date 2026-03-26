@@ -11,7 +11,7 @@
 
 use niffyinsure::{
     storage,
-    types::{ClaimStatus, Policy, PolicyType, RegionTier, VoteOption},
+    types::{ClaimStatus, Policy, PolicyType, RegionTier, TerminationReason, VoteOption},
     NiffyInsureClient,
 };
 use soroban_sdk::{testutils::Address as _, vec, Address, Env, String};
@@ -29,7 +29,7 @@ fn setup() -> (Env, Address, Address, Address) {
     (env, contract_id, admin, token)
 }
 
-fn make_policy(holder: &Address, policy_id: u32) -> Policy {
+fn make_policy(holder: &Address, policy_id: u32, asset: &Address) -> Policy {
     Policy {
         holder: holder.clone(),
         policy_id,
@@ -40,6 +40,10 @@ fn make_policy(holder: &Address, policy_id: u32) -> Policy {
         is_active: true,
         start_ledger: 0,
         end_ledger: 9_999_999,
+        asset: asset.clone(),
+        terminated_at_ledger: 0,
+        termination_reason: TerminationReason::None,
+        terminated_by_admin: false,
     }
 }
 
@@ -86,12 +90,12 @@ fn contract_starts_unpaused() {
 
 #[test]
 fn set_and_get_policy_round_trip() {
-    let (env, contract_id, _, _) = setup();
+    let (env, contract_id, _, token) = setup();
     let holder = Address::generate(&env);
-    let policy = make_policy(&holder, 1);
+    let policy = make_policy(&holder, 1, &token);
 
     env.as_contract(&contract_id, || {
-        storage::set_policy(&env, &policy);
+        storage::set_policy(&env, &holder, policy.policy_id, &policy);
         let loaded = storage::get_policy(&env, &holder, 1).expect("policy must exist");
         assert_eq!(loaded.policy_id, 1);
         assert_eq!(loaded.coverage, 100_000_000);
@@ -105,7 +109,7 @@ fn set_and_get_policy_round_trip() {
 
 #[test]
 fn get_policy_returns_none_when_absent() {
-    let (env, contract_id, _, _) = setup();
+    let (env, contract_id, _, token_addr) = setup();
     let holder = Address::generate(&env);
     env.as_contract(&contract_id, || {
         assert!(storage::get_policy(&env, &holder, 99).is_none());
@@ -153,6 +157,7 @@ fn set_and_get_claim_round_trip() {
             details: String::from_str(&env, "water damage"),
             image_urls: vec![&env],
             status: ClaimStatus::Processing,
+            voting_deadline_ledger: 101,
             approve_votes: 0,
             reject_votes: 0,
             filed_at: 1,
@@ -219,7 +224,8 @@ fn full_claim_vote_flow_approve() {
     let voter2 = Address::generate(&env);
 
     env.as_contract(&contract_id, || {
-        storage::set_policy(&env, &make_policy(&holder, 1));
+        let policy = make_policy(&holder, 1, &token_addr);
+        storage::set_policy(&env, &holder, 1, &policy);
         storage::add_voter(&env, &holder);
         storage::add_voter(&env, &voter2);
     });
@@ -249,13 +255,14 @@ fn full_claim_vote_flow_approve() {
 
 #[test]
 fn full_claim_vote_flow_reject() {
-    let (env, contract_id, _, _) = setup();
+    let (env, contract_id, _, token) = setup();
     let client = NiffyInsureClient::new(&env, &contract_id);
     let holder = Address::generate(&env);
     let voter2 = Address::generate(&env);
 
     env.as_contract(&contract_id, || {
-        storage::set_policy(&env, &make_policy(&holder, 1));
+        let policy = make_policy(&holder, 1, &token);
+        storage::set_policy(&env, &holder, 1, &policy);
         storage::add_voter(&env, &holder);
         storage::add_voter(&env, &voter2);
     });
@@ -272,13 +279,14 @@ fn full_claim_vote_flow_reject() {
 
 #[test]
 fn duplicate_vote_is_rejected() {
-    let (env, contract_id, _, _) = setup();
+    let (env, contract_id, _, token) = setup();
     let client = NiffyInsureClient::new(&env, &contract_id);
     let holder = Address::generate(&env);
     let voter2 = Address::generate(&env);
 
     env.as_contract(&contract_id, || {
-        storage::set_policy(&env, &make_policy(&holder, 1));
+        let policy = make_policy(&holder, 1, &token);
+        storage::set_policy(&env, &holder, 1, &policy);
         storage::add_voter(&env, &holder);
         storage::add_voter(&env, &voter2);
     });
@@ -295,13 +303,14 @@ fn duplicate_vote_is_rejected() {
 
 #[test]
 fn non_voter_cannot_vote() {
-    let (env, contract_id, _, _) = setup();
+    let (env, contract_id, _, token) = setup();
     let client = NiffyInsureClient::new(&env, &contract_id);
     let holder = Address::generate(&env);
     let outsider = Address::generate(&env);
 
     env.as_contract(&contract_id, || {
-        storage::set_policy(&env, &make_policy(&holder, 1));
+        let policy = make_policy(&holder, 1, &token);
+        storage::set_policy(&env, &holder, 1, &policy);
         storage::add_voter(&env, &holder);
         // outsider NOT added
     });

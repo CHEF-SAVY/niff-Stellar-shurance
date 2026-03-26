@@ -76,8 +76,7 @@ export default function SupportPage() {
           <CardHeader>
             <CardTitle id="contact-heading">Contact Support</CardTitle>
             <CardDescription>
-              Can&apos;t find what you need? Send us a message and we&apos;ll
-              respond within 1–2 business days.
+              Can&apos;t find what you need? Send us a message and we&apos;ll respond within 1–2 business days.
             </CardDescription>
           </CardHeader>
           <CardContent>

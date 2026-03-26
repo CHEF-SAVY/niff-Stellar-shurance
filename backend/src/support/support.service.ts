@@ -1,4 +1,5 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
+import { createHash } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { CaptchaService } from './captcha.service';
 import { CreateTicketDto } from './dto/create-ticket.dto';
@@ -42,7 +43,8 @@ export class SupportService {
 
   /** One-way hash so we can detect duplicate IPs without storing raw IPs */
   private hashIp(ip: string): string {
-    const crypto = require('crypto');
-    return crypto.createHash('sha256').update(ip + process.env.IP_HASH_SALT ?? 'niff-salt').digest('hex');
+    return createHash('sha256')
+      .update(ip + (process.env.IP_HASH_SALT ?? 'niff-salt'))
+      .digest('hex');
   }
 }

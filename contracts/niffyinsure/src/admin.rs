@@ -9,7 +9,7 @@
 ///
 /// Production deployments SHOULD use a Stellar multisig account as admin.
 /// See SECURITY.md for the full threat matrix and multisig setup guidance.
-use soroban_sdk::{contracterror, panic_with_error, symbol_short, Address, Env};
+use soroban_sdk::{contracterror, contractevent, panic_with_error, Address, Env};
 
 use crate::storage;
 
@@ -31,6 +31,61 @@ pub enum AdminError {
     InvalidDrainAmount = 105,
 }
 
+#[contractevent(topics = ["niffyinsure", "admin_proposed"])]
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct AdminProposed {
+    pub old_admin: Address,
+    pub new_admin: Address,
+}
+
+#[contractevent(topics = ["niffyinsure", "admin_accepted"])]
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct AdminAccepted {
+    pub old_admin: Address,
+    pub new_admin: Address,
+}
+
+#[contractevent(topics = ["niffyinsure", "admin_cancelled"])]
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct AdminCancelled {
+    pub current_admin: Address,
+    pub cancelled_pending: Address,
+}
+
+#[contractevent(topics = ["niffyinsure", "token_updated"])]
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct TokenUpdated {
+    pub old_token: Address,
+    pub new_token: Address,
+}
+
+#[contractevent(topics = ["niffyinsure", "treasury_updated"])]
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct TreasuryUpdated {
+    pub old_treasury: Address,
+    pub new_treasury: Address,
+}
+
+#[contractevent(topics = ["niffyinsure", "admin_paused"])]
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct AdminPaused {
+    pub admin: Address,
+}
+
+#[contractevent(topics = ["niffyinsure", "admin_unpaused"])]
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct AdminUnpaused {
+    pub admin: Address,
+}
+
+#[contractevent(topics = ["niffyinsure", "treasury_drained"])]
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct TreasuryDrained {
+    pub admin: Address,
+    pub recipient: Address,
+    pub amount: i128,
+}
+
 /// Load the stored admin address and call `require_auth()` on it.
 /// Auth is against the *stored* address — parameter spoofing cannot satisfy it.
 pub fn require_admin(env: &Env) -> Address {
@@ -48,10 +103,11 @@ pub fn require_admin(env: &Env) -> Address {
 pub fn propose_admin(env: &Env, new_admin: Address) {
     let current = require_admin(env);
     storage::set_pending_admin(env, &new_admin);
-    env.events().publish(
-        (symbol_short!("admin"), symbol_short!("proposed")),
-        (current, new_admin),
-    );
+    AdminProposed {
+        old_admin: current,
+        new_admin,
+    }
+    .publish(env);
 }
 
 /// Accept a pending admin proposal. The *pending* admin must authorize.
@@ -64,10 +120,11 @@ pub fn accept_admin(env: &Env) {
     let old_admin = storage::get_admin(env);
     storage::set_admin(env, &pending);
     storage::clear_pending_admin(env);
-    env.events().publish(
-        (symbol_short!("admin"), symbol_short!("accepted")),
-        (old_admin, pending),
-    );
+    AdminAccepted {
+        old_admin,
+        new_admin: pending,
+    }
+    .publish(env);
 }
 
 /// Cancel a pending admin proposal. Current admin must authorize.
@@ -77,10 +134,11 @@ pub fn cancel_admin(env: &Env) {
     let pending = storage::get_pending_admin(env)
         .unwrap_or_else(|| panic_with_error!(env, AdminError::NoPendingAdmin));
     storage::clear_pending_admin(env);
-    env.events().publish(
-        (symbol_short!("admin"), symbol_short!("cancelled")),
-        (current, pending),
-    );
+    AdminCancelled {
+        current_admin: current,
+        cancelled_pending: pending,
+    }
+    .publish(env);
 }
 
 /// Update the treasury token contract address. Admin must authorize.
@@ -89,10 +147,11 @@ pub fn set_token(env: &Env, new_token: Address) {
     let _admin = require_admin(env);
     let old_token = storage::get_token(env);
     storage::set_token(env, &new_token);
-    env.events().publish(
-        (symbol_short!("admin"), symbol_short!("token")),
-        (old_token, new_token),
-    );
+    TokenUpdated {
+        old_token,
+        new_token,
+    }
+    .publish(env);
 }
 
 /// Update the treasury address. Admin must authorize.
@@ -101,10 +160,11 @@ pub fn set_treasury(env: &Env, new_treasury: Address) {
     let _admin = require_admin(env);
     let old_treasury = storage::get_treasury(env);
     storage::set_treasury(env, &new_treasury);
-    env.events().publish(
-        (symbol_short!("admin"), symbol_short!("treasury")),
-        (old_treasury, new_treasury),
-    );
+    TreasuryUpdated {
+        old_treasury,
+        new_treasury,
+    }
+    .publish(env);
 }
 
 /// Pause the contract. Admin must authorize.
@@ -112,8 +172,7 @@ pub fn set_treasury(env: &Env, new_treasury: Address) {
 pub fn pause(env: &Env) {
     let admin = require_admin(env);
     storage::set_paused(env, true);
-    env.events()
-        .publish((symbol_short!("admin"), symbol_short!("paused")), (admin,));
+    AdminPaused { admin }.publish(env);
 }
 
 /// Unpause the contract. Admin must authorize.
@@ -121,10 +180,7 @@ pub fn pause(env: &Env) {
 pub fn unpause(env: &Env) {
     let admin = require_admin(env);
     storage::set_paused(env, false);
-    env.events().publish(
-        (symbol_short!("admin"), symbol_short!("unpaused")),
-        (admin,),
-    );
+    AdminUnpaused { admin }.publish(env);
 }
 
 /// Drain `amount` stroops from the contract treasury to `recipient`.
@@ -136,8 +192,10 @@ pub fn drain(env: &Env, recipient: Address, amount: i128) {
         panic_with_error!(env, AdminError::InvalidDrainAmount);
     }
     crate::token::transfer_from_contract(env, &recipient, amount);
-    env.events().publish(
-        (symbol_short!("admin"), symbol_short!("drained")),
-        (admin, recipient, amount),
-    );
+    TreasuryDrained {
+        admin,
+        recipient,
+        amount,
+    }
+    .publish(env);
 }

@@ -13,25 +13,20 @@ import {
   Controller,
   Post,
   Get,
-  Body,
   Query,
   UseInterceptors,
   UploadedFile,
-  UseGuards,
   BadRequestException,
   HttpCode,
   HttpStatus,
   Logger,
   Headers,
-  Req,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { Throttle } from '@nestjs/throttler';
-import { Request } from 'express';
 import { IpfsService, IpfsUploadResponse } from './services/ipfs.service';
 import { FileValidationService } from './services/file-validation.service';
 import { ApiTags, ApiOperation, ApiResponse, ApiConsumes, ApiBody, ApiHeader, ApiQuery } from '@nestjs/swagger';
-import { Multer } from 'multer';
 
 /**
  * DTO for upload options (query params)
@@ -153,7 +148,6 @@ export class IpfsController {
     @UploadedFile() file: Express.Multer.File,
     @Query() query: UploadQueryDto,
     @Headers('idempotency-key') idempotencyKey?: string,
-    @Req() _request?: Request,
   ): Promise<IpfsUploadResponse> {
     // Validate file was provided
     if (!file) {

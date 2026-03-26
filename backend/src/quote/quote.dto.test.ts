@@ -30,7 +30,8 @@ describe('GeneratePremiumDtoSchema', () => {
   });
 
   it('rejects missing policy_type', () => {
-    const { policy_type: _omit, ...rest } = valid;
+    const { policy_type, ...rest } = valid;
+    expect(policy_type).toBe('Auto');
     const result = GeneratePremiumDtoSchema.safeParse(rest);
     expect(result.success).toBe(false);
   });

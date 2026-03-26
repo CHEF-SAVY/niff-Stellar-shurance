@@ -3,6 +3,8 @@ import jwtService from '../services/jwt';
 import config from '../config';
 import { AuthenticatedRequest } from '../types';
 
+const isTestEnv = config.env === 'test';
+
 /**
  * Authentication middleware
  * Verifies JWT token from Authorization header
@@ -46,7 +48,7 @@ export function authenticate(req: Request, res: Response, next: NextFunction): v
     next();
   } catch (error) {
     // Log auth failure without leaking sensitive information
-    if (config.logging.logAuthFailures) {
+    if (config.logging.logAuthFailures && !isTestEnv) {
       console.error(`[AUTH] Token verification failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
 

@@ -18,7 +18,6 @@ import {
   HttpCode,
   HttpStatus,
   Post,
-  Req,
   UseGuards,
 } from '@nestjs/common';
 import {
@@ -28,7 +27,6 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
-import { Request } from 'express';
 import { TxService } from './tx.service';
 import { BuildTxDto } from './dto/build-tx.dto';
 import { SubmitTxDto } from './dto/submit-tx.dto';
@@ -66,7 +64,7 @@ export class TxController {
   @ApiResponse({ status: 400, description: 'Validation / account / simulation error — structured code + message' })
   @ApiResponse({ status: 429, description: 'Rate limited — 10 req/min per IP' })
   @ApiResponse({ status: 503, description: 'Contract not deployed or RPC unavailable' })
-  async build(@Body() dto: BuildTxDto, @Req() req: Request) {
+  async build(@Body() dto: BuildTxDto) {
     return this.txService.build(dto);
   }
 
@@ -97,7 +95,7 @@ export class TxController {
   @ApiResponse({ status: 400, description: 'Malformed XDR or missing signatures — structured code + message' })
   @ApiResponse({ status: 429, description: 'Rate limited — 20 req/min per IP' })
   @ApiResponse({ status: 503, description: 'RPC unavailable' })
-  async submit(@Body() dto: SubmitTxDto, @Req() req: Request) {
+  async submit(@Body() dto: SubmitTxDto) {
     return this.txService.submit(dto);
   }
 }

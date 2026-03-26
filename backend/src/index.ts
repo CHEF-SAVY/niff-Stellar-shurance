@@ -5,9 +5,12 @@ import rateLimit from 'express-rate-limit';
 import config, { validateProductionConfig } from './config';
 import authRoutes from './routes/auth';
 import adminRoutes from './routes/admin';
+import policyRoutes from './routes/policy.routes';
+import webhookRoutes from './routes/webhook.routes';
 import userService from './services/user';
 import { checkRedisHealth, closeRedisClient } from './redis/client';
 import { collectRedisMetrics } from './redis/metrics';
+import { openapiSpec } from './openapi/spec';
 
 const app = express();
 
@@ -42,15 +45,15 @@ const authLimiter = rateLimit({
 });
 app.use('/api/auth/login', authLimiter);
 
-// Body parsing
+// Webhooks need the raw request stream for signature verification.
+app.use('/webhooks', webhookRoutes);
+
+// Body parsing for the rest of the app
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // Health check (unauthenticated)
-app.get('/health', (_req, res) => res.json({
-  status: 'ok',
-  timestamp: new Date().toISOString(),
-}));
+app.get('/health', (_req, res) => res.json({ status: 'ok' }));
 
 // Readiness probe — includes Redis connectivity
 app.get('/health/ready', async (_req, res) => {
@@ -67,6 +70,12 @@ app.get('/metrics/redis', async (_req, res) => {
   res.json(metrics);
 });
 
+app.get('/openapi.json', (_req, res) => {
+  res.json(openapiSpec);
+});
+
+app.use('/policies', policyRoutes);
+
 // API Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/admin', adminRoutes);
@@ -82,6 +91,7 @@ app.use((_req: Request, res: Response) => {
 
 // Error handler
 app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
+  void _next;
   console.error('[ERROR]', err.message);
   res.status(500).json({
     error: 'Internal Server Error',
@@ -90,7 +100,7 @@ app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
   });
 });
 
-async function startServer() {
+export async function initializeApp(): Promise<void> {
   if (config.env === 'production') {
     validateProductionConfig(config);
   }
@@ -98,14 +108,7 @@ async function startServer() {
   if (config.env !== 'production') {
     await userService.initializeDefaultUser();
   }
-
-  app.listen(config.port, () => {
-    console.log(`Server running on port ${config.port} in ${config.env} mode`);
-    console.log(`Health check: http://localhost:${config.port}/health`);
-  });
 }
-
-startServer().catch(console.error);
 
 export { closeRedisClient };
 export default app;

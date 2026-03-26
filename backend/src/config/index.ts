@@ -14,6 +14,13 @@ export interface AppConfig {
   bcrypt: {
     saltRounds: number;
   };
+  database: {
+    host: string;
+    port: number;
+    username: string;
+    password: string;
+    name: string;
+  };
   security: {
     corsOrigins: string[];
     rateLimitWindowMs: number;
@@ -43,6 +50,13 @@ export function getConfig(): AppConfig {
     },
     bcrypt: {
       saltRounds: parseInt(process.env.BCRYPT_ROUNDS || '12', 10),
+    },
+    database: {
+      host: process.env.DB_HOST || 'localhost',
+      port: parseInt(process.env.DB_PORT || '5432', 10),
+      username: process.env.DB_USERNAME || 'niff_user',
+      password: process.env.DB_PASSWORD || 'niff_password',
+      name: process.env.DB_NAME || 'niff_stellar',
     },
     security: {
       corsOrigins: (process.env.CORS_ORIGINS || '*').split(','),
