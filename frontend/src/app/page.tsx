@@ -1,3 +1,12 @@
+import { Hero, HowItWorks, Security, CTA } from '@/components/landing'
+
 export default function Home() {
-  return <main><h1>niffyInsur</h1></main>;
+  return (
+    <main>
+      <Hero />
+      <HowItWorks />
+      <Security />
+      <CTA />
+    </main>
+  )
 }
