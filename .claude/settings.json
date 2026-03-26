@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(find /home/ljtwp/Desktop/drips/niff -type f -name *.sol -o -name *.rs -o -name *.ts -o -name *.tsx -o -name *.js -o -name *.jsx)",
+      "Bash(cargo test:*)",
+      "Bash(cargo fmt:*)",
+      "Bash(cargo clippy:*)"
+    ]
+  }
+}

@@ -66,6 +66,7 @@ pub fn initiate_policy(
         terminated_at_ledger: 0,
         termination_reason: TerminationReason::None,
         terminated_by_admin: false,
+        strike_count: 0,
     };
 
     validate::check_policy(&policy).map_err(|e| match e {
@@ -212,5 +213,10 @@ fn termination_reason_tag(reason: TerminationReason) -> u32 {
         TerminationReason::FraudOrMisrepresentation => 4,
         TerminationReason::RegulatoryAction => 5,
         TerminationReason::AdminOverride => 6,
+        // 7 = ExcessiveRejections: set by the claims engine via on_reject,
+        // not by the policy-lifecycle termination flow. Included here for
+        // completeness; PolicyTerminated is not normally emitted for this
+        // reason — PolicyDeactivated (from claim.rs) is the canonical event.
+        TerminationReason::ExcessiveRejections => 7,
     }
 }

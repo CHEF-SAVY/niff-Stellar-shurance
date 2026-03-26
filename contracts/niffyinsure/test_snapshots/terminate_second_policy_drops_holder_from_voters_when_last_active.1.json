@@ -240,6 +240,14 @@
                     },
                     {
                       "key": {
+                        "symbol": "strike_count"
+                      },
+                      "val": {
+                        "u32": 0
+                      }
+                    },
+                    {
+                      "key": {
                         "symbol": "terminated_at_ledger"
                       },
                       "val": {
@@ -404,6 +412,14 @@
                       },
                       "val": {
                         "u32": 1
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "strike_count"
+                      },
+                      "val": {
+                        "u32": 0
                       }
                     },
                     {

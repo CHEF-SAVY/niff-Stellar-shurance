@@ -81,7 +81,7 @@ fn generate_premium_uses_local_engine_when_no_calculator_set() {
 fn generate_premium_routes_to_external_calculator() {
     let env = Env::default();
     env.mock_all_auths();
-    let (policy_client, _, admin, _) = setup_policy_contract(&env);
+    let (policy_client, _, _admin, _) = setup_policy_contract(&env);
     let (calc_client, calc_id, _) = setup_calculator(&env);
 
     // Verify the calculator itself returns the expected value
@@ -104,7 +104,7 @@ fn calculator_rotation_changes_pricing() {
     let env = Env::default();
     env.mock_all_auths();
     let (policy_client, _, _, _) = setup_policy_contract(&env);
-    let (calc_client_v1, calc_id_v1, calc_admin_v1) = setup_calculator(&env);
+    let (calc_client_v1, calc_id_v1, _calc_admin_v1) = setup_calculator(&env);
     let (_, calc_id_v2, _) = setup_calculator(&env);
 
     // Upgrade v1 calculator with a higher-risk table (version 2)

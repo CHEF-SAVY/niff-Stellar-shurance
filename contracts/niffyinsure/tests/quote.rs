@@ -127,6 +127,6 @@ fn generate_premium_returns_structured_validation_errors() {
 
     assert_eq!(safety_msg.code, Error::SafetyScoreOutOfRange as u32);
     assert_eq!(base_msg.code, Error::InvalidBaseAmount as u32);
-    assert!(safety_msg.message.len() > 0);
-    assert!(base_msg.message.len() > 0);
+    assert!(!safety_msg.message.is_empty());
+    assert!(!base_msg.message.is_empty());
 }

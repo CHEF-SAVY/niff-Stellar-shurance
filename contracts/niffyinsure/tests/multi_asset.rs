@@ -10,10 +10,7 @@
 #![cfg(test)]
 
 use niffyinsure::NiffyInsureClient;
-use soroban_sdk::{
-    testutils::{Address as _, Events},
-    token, Address, Env,
-};
+use soroban_sdk::{testutils::Address as _, token, Address, Env};
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 

@@ -24,6 +24,7 @@ fn dummy_policy(env: &Env, start: u32, end: u32, coverage: i128, active: bool) -
         terminated_at_ledger: 0,
         termination_reason: TerminationReason::None,
         terminated_by_admin: false,
+        strike_count: 0,
     }
 }
 

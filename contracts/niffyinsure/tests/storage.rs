@@ -44,6 +44,7 @@ fn make_policy(holder: &Address, policy_id: u32, asset: &Address) -> Policy {
         terminated_at_ledger: 0,
         termination_reason: TerminationReason::None,
         terminated_by_admin: false,
+        strike_count: 0,
     }
 }
 
@@ -109,7 +110,7 @@ fn set_and_get_policy_round_trip() {
 
 #[test]
 fn get_policy_returns_none_when_absent() {
-    let (env, contract_id, _, token_addr) = setup();
+    let (env, contract_id, _, _token_addr) = setup();
     let holder = Address::generate(&env);
     env.as_contract(&contract_id, || {
         assert!(storage::get_policy(&env, &holder, 99).is_none());

@@ -15,7 +15,7 @@
 
 #![cfg(test)]
 
-use niffyinsure::{AdminError, NiffyInsureClient};
+use niffyinsure::NiffyInsureClient;
 use soroban_sdk::{
     testutils::{Address as _, Events, MockAuth, MockAuthInvoke},
     vec, Address, Env,
@@ -35,8 +35,8 @@ fn setup() -> (Env, NiffyInsureClient<'static>, Address, Address) {
 }
 
 /// Build a fresh env where only `signer` is mocked for `fn_name` on `cid`.
-fn env_with_single_auth<'a>(
-    env: &'a Env,
+fn env_with_single_auth(
+    env: &Env,
     cid: &Address,
     signer: &Address,
     fn_name: &str,
@@ -319,7 +319,7 @@ fn event01_pause_emits_event() {
 
 #[test]
 fn event01_unpause_emits_event() {
-    let (env, client, admin, _) = setup();
+    let (_env, client, admin, _) = setup();
     client.pause(&admin, &0u32);
     client.unpause(&admin, &0u32);
     assert!(!client.is_paused());

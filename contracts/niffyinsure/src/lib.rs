@@ -468,6 +468,7 @@ impl NiffyInsure {
             terminated_at_ledger: 0,
             termination_reason: TerminationReason::None,
             terminated_by_admin: false,
+            strike_count: 0,
         };
         env.storage().persistent().set(
             &storage::DataKey::Policy(holder.clone(), policy_id),

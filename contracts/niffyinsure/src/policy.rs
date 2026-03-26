@@ -272,6 +272,7 @@ pub fn initiate_policy(
         terminated_at_ledger: 0,
         termination_reason: crate::types::TerminationReason::None,
         terminated_by_admin: false,
+        strike_count: 0,
     };
 
     validate::check_policy(&policy).map_err(|_| PolicyError::PolicyValidation)?;

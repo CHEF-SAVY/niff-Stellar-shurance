@@ -7,6 +7,25 @@ pub const IMAGE_URLS_MAX: u32 = 5;
 pub const REASON_MAX_LEN: u32 = 128;
 pub const SAFETY_SCORE_MAX: u32 = 100;
 
+// ── Rejection side-effect thresholds ─────────────────────────────────────────
+//
+// GOVERNANCE NOTE: This constant is the only on-chain parameter controlling
+// automatic policy deactivation. Changing it requires a contract upgrade and
+// cannot be altered by the admin at runtime — removing an avenue for
+// admin-only extraction via strike-count manipulation.
+//
+// LEGAL NOTE: Product/legal must sign off on the strike threshold before
+// mainnet deployment. Three rejections is a conservative starting point.
+// The threshold intentionally errs toward coverage preservation; false
+// positives (legitimate holders de-activated) are harder to recover from
+// than false negatives (fraudulent holders retained until human review).
+//
+// APPEAL INTERACTION: If an appeal window is added later, auto-deactivation
+// should be deferred until the appeal deadline passes. Implement by adding a
+// `deactivation_pending_until_ledger: u32` field to Policy and skipping the
+// `is_active = false` write until that ledger is reached.
+pub const STRIKE_DEACTIVATION_THRESHOLD: u32 = 3;
+
 // ── Ledger window constants (re-exported from ledger.rs for ABI visibility) ───
 //
 // These are the canonical values used by on-chain checks.  The frontend and
@@ -124,6 +143,15 @@ pub enum VoteOption {
 }
 
 /// Reason for policy termination.
+///
+/// GOVERNANCE NOTE: `ExcessiveRejections` is set by the claims engine
+/// automatically when `strike_count` reaches `STRIKE_DEACTIVATION_THRESHOLD`.
+/// All other variants require an explicit holder or admin action.
+///
+/// CENTRALIZATION RISK: `AdminOverride` allows the admin to terminate any
+/// policy for any reason at any time. This is a privileged operation that
+/// bypasses normal holder protections. Consider a time-lock or multi-sig
+/// requirement before using this variant in production.
 #[contracttype]
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub enum TerminationReason {
@@ -134,9 +162,15 @@ pub enum TerminationReason {
     FraudOrMisrepresentation,
     RegulatoryAction,
     AdminOverride,
-    /// Policy deactivated automatically by `on_reject` when `strike_count` reached
-    /// `STRIKE_DEACTIVATION_THRESHOLD`.  Not set by admin.
-    /// **XDR append-safe:** appended at end of enum; existing serialised values unchanged.
+    /// Automatically set when `Policy.strike_count` reaches
+    /// `STRIKE_DEACTIVATION_THRESHOLD` consecutive rejections.
+    /// No admin intervention is required or possible to prevent this;
+    /// the transition is deterministic and trustless.
+    ///
+    /// APPEAL NOTE: If an appeal window is introduced, deactivation should be
+    /// deferred until the appeal window closes. The `PolicyDeactivated` event
+    /// (emitted in `claim.rs`) is the authoritative signal for indexers; it
+    /// will carry a `reason_code = 1` identifying this variant.
     ExcessiveRejections,
 }
 
@@ -199,11 +233,21 @@ pub struct Policy {
     pub terminated_by_admin: bool,
     /// Running count of rejected claims against this policy.
     ///
-    /// Incremented by `claim::on_reject`.  When `strike_count >= STRIKE_DEACTIVATION_THRESHOLD`
-    /// the policy is automatically deactivated (`is_active = false`) and a `PolicyDeactivated`
-    /// event is emitted.  A successful appeal decrements this counter.
+    /// Incremented by `claim::on_reject` every time a claim on this policy
+    /// reaches `ClaimStatus::Rejected` (whether via majority vote or deadline
+    /// finalization). Never decremented; exists purely for accumulation.
     ///
-    /// **Renewal gate:** any future `renew_policy` implementation MUST gate on this field.
+    /// When `strike_count >= STRIKE_DEACTIVATION_THRESHOLD`, the policy is
+    /// automatically deactivated (`is_active = false`) and the
+    /// `PolicyDeactivated` event is emitted. No admin action is required.
+    ///
+    /// RENEWAL GATE: Any future `renew_policy` implementation MUST check
+    /// `strike_count` before allowing renewal. A policy with strikes at or
+    /// near the threshold should be blocked or require admin review.
+    ///
+    /// DATA VISIBILITY: This field is stored on-chain and permanently
+    /// readable via `get_policy`. It carries only a count — no allegation
+    /// narratives, no claimant-identifying data.
     pub strike_count: u32,
 }
 

@@ -14,7 +14,7 @@
 
 #![cfg(test)]
 
-use niffyinsure::{AdminError, NiffyInsureClient};
+use niffyinsure::NiffyInsureClient;
 use soroban_sdk::{
     testutils::{Address as _, Events},
     Address, Env,
