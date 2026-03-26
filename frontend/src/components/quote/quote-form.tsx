@@ -125,7 +125,7 @@ export function QuoteForm({ onQuoteReceived }: QuoteFormProps) {
   }
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 min-w-0">
       <Card>
         <CardHeader>
           <CardTitle>Get Insurance Quote</CardTitle>
@@ -197,7 +197,7 @@ export function QuoteForm({ onQuoteReceived }: QuoteFormProps) {
                 <select
                   id="riskCategory"
                   {...register('riskCategory')}
-                  className={`w-full h-10 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 ${
+                  className={`w-full h-11 rounded-md border border-input bg-background px-3 py-2 text-base ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 ${
                     errors.riskCategory ? 'border-destructive' : ''
                   }`}
                 >
@@ -215,7 +215,7 @@ export function QuoteForm({ onQuoteReceived }: QuoteFormProps) {
                 <select
                   id="contractType"
                   {...register('contractType')}
-                  className={`w-full h-10 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 ${
+                  className={`w-full h-11 rounded-md border border-input bg-background px-3 py-2 text-base ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 ${
                     errors.contractType ? 'border-destructive' : ''
                   }`}
                 >
@@ -237,7 +237,7 @@ export function QuoteForm({ onQuoteReceived }: QuoteFormProps) {
                 rows={3}
                 placeholder="Describe your contract and what it does..."
                 {...register('description')}
-                className={`w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 ${
+                className={`w-full rounded-md border border-input bg-background px-3 py-2 text-base ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 ${
                   errors.description ? 'border-destructive' : ''
                 }`}
               />
@@ -251,27 +251,30 @@ export function QuoteForm({ onQuoteReceived }: QuoteFormProps) {
                 type="checkbox"
                 id="additionalCoverage"
                 {...register('additionalCoverage')}
-                className="rounded border-gray-300"
+                className="rounded border-gray-300 h-5 w-5"
               />
               <Label htmlFor="additionalCoverage" className="text-sm">
                 Include additional coverage options
               </Label>
             </div>
 
-            <Button 
-              type="submit" 
-              disabled={!isValid || isSubmitting}
-              className="w-full"
-            >
-              {isSubmitting ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Generating Quote...
-                </>
-              ) : (
-                'Get Quote'
-              )}
-            </Button>
+            {/* Sticky CTA on mobile */}
+            <div className="sticky-action-bar bg-background/95 backdrop-blur-sm border-t pt-3 -mx-6 px-6 sm:static sm:border-0 sm:bg-transparent sm:backdrop-blur-none sm:pt-0 sm:mx-0 sm:px-0">
+              <Button
+                type="submit"
+                disabled={!isValid || isSubmitting}
+                className="w-full"
+              >
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Generating Quote...
+                  </>
+                ) : (
+                  'Get Quote'
+                )}
+              </Button>
+            </div>
           </form>
         </CardContent>
       </Card>

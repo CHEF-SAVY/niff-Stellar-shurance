@@ -341,7 +341,7 @@ export function PolicyInitiation({ quoteId: propQuoteId }: PolicyInitiationProps
                       type="checkbox"
                       id="acceptTerms"
                       {...register('acceptTerms')}
-                      className="rounded border-gray-300"
+                      className="rounded border-gray-300 h-5 w-5"
                     />
                     <Label htmlFor="acceptTerms" className="text-sm">
                       I accept the terms and conditions and understand the risks
@@ -373,20 +373,23 @@ export function PolicyInitiation({ quoteId: propQuoteId }: PolicyInitiationProps
                   </div>
                 </div>
 
-                <Button 
-                  type="submit" 
-                  disabled={!isValid || isSubmitting}
-                  className="w-full"
-                >
-                  {isSubmitting ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Initiating Policy...
-                    </>
-                  ) : (
-                    'Initiate Policy'
-                  )}
-                </Button>
+                {/* Sticky CTA on mobile */}
+                <div className="sticky-action-bar bg-background/95 backdrop-blur-sm border-t pt-3 -mx-6 px-6 sm:static sm:border-0 sm:bg-transparent sm:backdrop-blur-none sm:pt-0 sm:mx-0 sm:px-0">
+                  <Button
+                    type="submit"
+                    disabled={!isValid || isSubmitting}
+                    className="w-full"
+                  >
+                    {isSubmitting ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Initiating Policy...
+                      </>
+                    ) : (
+                      'Initiate Policy'
+                    )}
+                  </Button>
+                </div>
               </form>
             </div>
           </StepContent>

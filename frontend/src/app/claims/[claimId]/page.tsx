@@ -18,7 +18,10 @@ export default function ClaimPage({ params }: ClaimPageProps) {
   const currentLedger = 0
 
   return (
-    <main className="mx-auto max-w-2xl px-4 py-10">
+    <main
+      className="mx-auto max-w-2xl px-4 py-10 pb-[calc(2.5rem+env(safe-area-inset-bottom,0px))]"
+      style={{ paddingLeft: 'max(1rem, env(safe-area-inset-left, 0px))', paddingRight: 'max(1rem, env(safe-area-inset-right, 0px))' }}
+    >
       <h1 className="mb-6 text-xl font-bold">
         Claim vote — <span className="font-mono text-base">{params.claimId}</span>
       </h1>

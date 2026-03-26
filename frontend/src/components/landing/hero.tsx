@@ -17,12 +17,12 @@ export function Hero() {
             Parametric insurance powered by DAO governance. Get coverage for smart contract risks with transparent, community-driven claim voting.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center mb-12">
-            <Button size="lg" className="text-lg px-8 py-4" asChild>
+            <Button size="lg" className="w-full sm:w-auto text-lg px-8 py-4" asChild>
               <Link href="/quote">
                 Get Quote <ArrowRight className="ml-2 h-5 w-5" />
               </Link>
             </Button>
-            <Button variant="outline" size="lg" className="text-lg px-8 py-4" asChild>
+            <Button variant="outline" size="lg" className="w-full sm:w-auto text-lg px-8 py-4" asChild>
               <Link href="#how-it-works">
                 Learn More
               </Link>

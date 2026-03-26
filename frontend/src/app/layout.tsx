@@ -3,6 +3,13 @@ import { headers } from "next/headers";
 import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
 import { inter, ibmPlexMono } from "@/lib/fonts";
+import { OfflineBanner } from "@/components/ui/offline-banner";
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover", // enables safe-area-inset-* on notched devices
+};
 
 export const metadata: Metadata = {
   title: "NiffyInsur - Decentralized Insurance for Stellar Network",
