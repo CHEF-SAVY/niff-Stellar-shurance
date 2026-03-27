@@ -134,6 +134,28 @@ impl ClaimStatus {
     }
 }
 
+/// One step in a claim's on-chain status timeline.
+///
+/// `ledger` is the Stellar ledger sequence when the claim entered `status`.
+/// Persisted on the claim so Next.js timelines can render the lifecycle without
+/// depending only on indexer events (which may be incomplete during reindex).
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ClaimStatusHistoryEntry {
+    pub status: ClaimStatus,
+    pub ledger: u32,
+}
+
+/// Maximum `(status, ledger)` pairs retained per claim.
+///
+/// When a new transition would exceed this, the **oldest** entry is dropped
+/// (FIFO) so claim storage cannot grow without bound (anti-griefing).
+///
+/// Sized above the documented main flow plus appeal rounds (`MAX_APPEALS_PER_CLAIM`
+/// in `ledger.rs`). If more transitions occur than this (e.g. future protocol
+/// changes), **`status_history` may omit early steps** — `status` remains canonical.
+pub const CLAIM_STATUS_HISTORY_MAX: u32 = 24;
+
 #[contracttype]
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub enum VoteOption {
@@ -331,6 +353,10 @@ pub struct Claim {
     pub appeal_approve_votes: u32,
     /// Reject votes cast in the current appeal round.
     pub appeal_reject_votes: u32,
+    /// Append-only status timeline (oldest → newest). Capped at
+    /// [`CLAIM_STATUS_HISTORY_MAX`]; on overflow the oldest entries are removed.
+    /// May be incomplete if the cap is exceeded; `status` is authoritative.
+    pub status_history: Vec<ClaimStatusHistoryEntry>,
 }
 
 #[contracttype]

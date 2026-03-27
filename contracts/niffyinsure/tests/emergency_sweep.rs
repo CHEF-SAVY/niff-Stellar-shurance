@@ -204,6 +204,7 @@ fn sweep_reverts_when_violating_protected_balance() {
         policy_id: 1,
         claimant: holder.clone(),
         amount: 600_000,
+        asset: token.clone(),
         status: ClaimStatus::Approved,
         details: String::from_str(&env, "Test claim"),
         image_urls: soroban_sdk::vec![&env],
@@ -216,6 +217,7 @@ fn sweep_reverts_when_violating_protected_balance() {
         appeal_deadline_ledger: 0,
         appeal_approve_votes: 0,
         appeal_reject_votes: 0,
+        status_history: soroban_sdk::Vec::new(&env),
     };
 
     // Use env.as_contract to access storage from test context
@@ -266,6 +268,7 @@ fn sweep_ignores_paid_claims_in_protected_balance() {
         policy_id: 1,
         claimant: holder.clone(),
         amount: 600_000,
+        asset: token.clone(),
         status: ClaimStatus::Paid,
         details: String::from_str(&env, "Paid claim"),
         image_urls: soroban_sdk::vec![&env],
@@ -278,6 +281,7 @@ fn sweep_ignores_paid_claims_in_protected_balance() {
         appeal_deadline_ledger: 0,
         appeal_approve_votes: 0,
         appeal_reject_votes: 0,
+        status_history: soroban_sdk::Vec::new(&env),
     };
 
     // Use env.as_contract to access storage from test context

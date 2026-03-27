@@ -155,6 +155,7 @@ fn set_and_get_claim_round_trip() {
             policy_id: 1,
             claimant: holder.clone(),
             amount: 50_000_000,
+            asset: Address::generate(&env),
             details: String::from_str(&env, "water damage"),
             image_urls: vec![&env],
             status: ClaimStatus::Processing,
@@ -167,6 +168,7 @@ fn set_and_get_claim_round_trip() {
             appeal_deadline_ledger: 0,
             appeal_approve_votes: 0,
             appeal_reject_votes: 0,
+            status_history: soroban_sdk::Vec::new(&env),
         };
         storage::set_claim(&env, &claim);
         let loaded = storage::get_claim(&env, 1).expect("claim must exist");
@@ -430,6 +432,7 @@ fn make_claim(env: &Env, claim_id: u64, holder: &Address) -> niffyinsure::types:
         policy_id: 1,
         claimant: holder.clone(),
         amount: 10_000_000,
+        asset: Address::generate(env),
         details: String::from_str(env, "test"),
         image_urls: vec![env],
         status: ClaimStatus::Processing,
@@ -442,6 +445,7 @@ fn make_claim(env: &Env, claim_id: u64, holder: &Address) -> niffyinsure::types:
         appeal_deadline_ledger: 0,
         appeal_approve_votes: 0,
         appeal_reject_votes: 0,
+        status_history: soroban_sdk::Vec::new(env),
     }
 }
 

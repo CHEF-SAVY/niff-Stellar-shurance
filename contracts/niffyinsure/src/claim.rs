@@ -68,12 +68,25 @@
 use crate::{
     ledger, storage,
     types::{
-        Claim, ClaimProcessed, ClaimStatus, TerminationReason, VoteOption,
-        STRIKE_DEACTIVATION_THRESHOLD,
+        Claim, ClaimProcessed, ClaimStatus, ClaimStatusHistoryEntry, TerminationReason, VoteOption,
+        CLAIM_STATUS_HISTORY_MAX, STRIKE_DEACTIVATION_THRESHOLD,
     },
     validate::Error,
 };
 use soroban_sdk::{contractevent, Address, Env, String, Vec};
+
+/// Append `status` at `ledger`, then drop oldest entries if over [`CLAIM_STATUS_HISTORY_MAX`].
+/// Never fails — transitions must not revert because the log is full.
+fn push_status_transition(
+    history: &mut Vec<ClaimStatusHistoryEntry>,
+    status: ClaimStatus,
+    ledger: u32,
+) {
+    history.push_back(ClaimStatusHistoryEntry { status, ledger });
+    while history.len() > CLAIM_STATUS_HISTORY_MAX {
+        history.pop_front();
+    }
+}
 
 // ── Events ────────────────────────────────────────────────────────────────────
 
@@ -206,6 +219,8 @@ pub fn file_claim(
     crate::validate::check_claim_fields(env, amount, policy.coverage, details, image_urls)?;
 
     let claim_id = storage::next_claim_id(env);
+    let mut status_history: Vec<ClaimStatusHistoryEntry> = Vec::new(env);
+    push_status_transition(&mut status_history, ClaimStatus::Processing, now);
     let claim = Claim {
         claim_id,
         policy_id,
@@ -224,6 +239,7 @@ pub fn file_claim(
         appeal_deadline_ledger: 0,
         appeal_approve_votes: 0,
         appeal_reject_votes: 0,
+        status_history,
     };
 
     storage::set_claim(env, &claim);
@@ -281,6 +297,8 @@ pub fn vote_on_claim(
 
     storage::set_vote(env, claim_id, voter, vote);
 
+    let status_before = claim.status.clone();
+
     match vote {
         VoteOption::Approve => claim.approve_votes += 1,
         VoteOption::Reject => claim.reject_votes += 1,
@@ -294,6 +312,10 @@ pub fn vote_on_claim(
     } else if claim.reject_votes >= majority {
         claim.status = ClaimStatus::Rejected;
         claim.appeal_open_deadline_ledger = now.saturating_add(ledger::APPEAL_OPEN_WINDOW_LEDGERS);
+    }
+
+    if claim.status != status_before {
+        push_status_transition(&mut claim.status_history, claim.status.clone(), now);
     }
 
     let newly_rejected = claim.status == ClaimStatus::Rejected;
@@ -336,15 +358,18 @@ pub fn finalize_claim(env: &Env, claim_id: u64) -> Result<ClaimStatus, Error> {
         return Err(Error::VotingWindowStillOpen);
     }
 
-    let _newly_rejected;
+    let status_before = claim.status.clone();
+
     if claim.approve_votes > claim.reject_votes {
         claim.status = ClaimStatus::Approved;
-        _newly_rejected = false;
     } else {
         // Tie or reject plurality → Rejected (insurer wins tie).
         claim.status = ClaimStatus::Rejected;
         claim.appeal_open_deadline_ledger = now.saturating_add(ledger::APPEAL_OPEN_WINDOW_LEDGERS);
-        _newly_rejected = true;
+    }
+
+    if claim.status != status_before {
+        push_status_transition(&mut claim.status_history, claim.status.clone(), now);
     }
 
     let newly_rejected = claim.status == ClaimStatus::Rejected;
@@ -386,7 +411,9 @@ pub fn process_claim(env: &Env, claim_id: u64) -> Result<(), Error> {
     }
 
     payout(env, &claim)?;
+    let now = env.ledger().sequence();
     claim.status = ClaimStatus::Paid;
+    push_status_transition(&mut claim.status_history, ClaimStatus::Paid, now);
     storage::set_open_claim(env, &claim.claimant, claim.policy_id, false);
     storage::set_claim(env, &claim);
     Ok(())
@@ -522,6 +549,11 @@ pub fn get_claim(env: &Env, claim_id: u64) -> Result<Claim, Error> {
     storage::get_claim(env, claim_id).ok_or(Error::ClaimNotFound)
 }
 
+pub fn get_claim_history(env: &Env, claim_id: u64) -> Result<Vec<ClaimStatusHistoryEntry>, Error> {
+    let c = storage::get_claim(env, claim_id).ok_or(Error::ClaimNotFound)?;
+    Ok(c.status_history)
+}
+
 pub fn is_allowed_asset(env: &Env, asset: &Address) -> bool {
     storage::is_allowed_asset(env, asset)
 }
@@ -544,4 +576,27 @@ fn hash_image_urls(urls: &Vec<String>) -> u64 {
         }
     }
     hash
+}
+
+#[cfg(test)]
+mod claim_status_history_tests {
+    use super::push_status_transition;
+    use crate::types::{ClaimStatus, ClaimStatusHistoryEntry, CLAIM_STATUS_HISTORY_MAX};
+    use soroban_sdk::Env;
+
+    #[test]
+    fn fifo_cap_drops_oldest_without_growing() {
+        let env = Env::default();
+        let mut hist = soroban_sdk::Vec::<ClaimStatusHistoryEntry>::new(&env);
+        let extra = 5u32;
+        for ledger in 0..(CLAIM_STATUS_HISTORY_MAX + extra) {
+            push_status_transition(&mut hist, ClaimStatus::Processing, ledger);
+        }
+        assert_eq!(hist.len(), CLAIM_STATUS_HISTORY_MAX);
+        assert_eq!(hist.get(0).unwrap().ledger, extra);
+        assert_eq!(
+            hist.get(hist.len() - 1).unwrap().ledger,
+            CLAIM_STATUS_HISTORY_MAX + extra - 1
+        );
+    }
 }

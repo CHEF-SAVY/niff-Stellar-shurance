@@ -46,4 +46,6 @@ export interface Claim {
   status: ClaimStatus;
   approve_votes: number;
   reject_votes: number;
+  /** On-chain append-only timeline; may be truncated (see contract `CLAIM_STATUS_HISTORY_MAX`). */
+  status_history?: { status: string; ledger: number }[];
 }

@@ -19,7 +19,7 @@ mod oracle;
 #[cfg(feature = "experimental")]
 pub use oracle::*;
 
-use soroban_sdk::{contract, contractevent, contractimpl, Address, Env, Vec};
+use soroban_sdk::{contract, contractevent, contractimpl, panic_with_error, Address, Env, Vec};
 
 #[contract]
 pub struct NiffyInsure;
@@ -178,36 +178,6 @@ impl NiffyInsure {
         amount: i128,
         details: soroban_sdk::String,
         image_urls: Vec<soroban_sdk::String>,
-    ) -> Result<u64, validate::Error> {
-        holder.require_auth();
-        claim::file_claim(&env, &holder, policy_id, amount, &details, &image_urls)
-    }
-
-    pub fn vote_on_claim(
-        env: Env,
-        voter: Address,
-        claim_id: u64,
-        vote: types::VoteOption,
-    ) -> Result<types::ClaimStatus, validate::Error> {
-        voter.require_auth();
-        claim::vote_on_claim(&env, &voter, claim_id, &vote)
-    }
-
-    pub fn finalize_claim(env: Env, claim_id: u64) -> Result<types::ClaimStatus, validate::Error> {
-        claim::finalize_claim(&env, claim_id)
-    }
-
-    pub fn get_claim(env: Env, claim_id: u64) -> Result<types::Claim, validate::Error> {
-        claim::get_claim(&env, claim_id)
-    }
-
-    pub fn file_claim(
-        env: Env,
-        holder: Address,
-        policy_id: u32,
-        amount: i128,
-        details: String,
-        image_urls: Vec<String>,
     ) -> u64 {
         holder.require_auth();
         claim::file_claim(&env, &holder, policy_id, amount, &details, &image_urls)
@@ -228,6 +198,15 @@ impl NiffyInsure {
     pub fn finalize_claim(env: Env, claim_id: u64) -> types::ClaimStatus {
         claim::finalize_claim(&env, claim_id)
             .unwrap_or_else(|e| panic_with_error!(&env, e))
+    }
+
+    pub fn get_claim(env: Env, claim_id: u64) -> types::Claim {
+        claim::get_claim(&env, claim_id).unwrap_or_else(|e| panic_with_error!(&env, e))
+    }
+
+    /// Read-only: bounded `(status, ledger)` timeline for `claim_id` (same slice as on `Claim`).
+    pub fn get_claim_history(env: Env, claim_id: u64) -> Vec<types::ClaimStatusHistoryEntry> {
+        claim::get_claim_history(&env, claim_id).unwrap_or_else(|e| panic_with_error!(&env, e))
     }
 
     pub fn get_claim_counter(env: Env) -> u64 {

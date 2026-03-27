@@ -251,6 +251,7 @@ fn claim_payout_uses_policy_bound_asset() {
         policy_id: policy.policy_id,
         claimant: holder.clone(),
         amount: 5_000_000i128,
+        asset: t.token_a.clone(),
         details: SorobanString::from_str(&t.env, "fire damage"),
         image_urls: Vec::new(&t.env),
         status: ClaimStatus::Approved,
@@ -263,6 +264,7 @@ fn claim_payout_uses_policy_bound_asset() {
         appeal_deadline_ledger: 0,
         appeal_approve_votes: 0,
         appeal_reject_votes: 0,
+        status_history: Vec::new(&t.env),
     };
     t.env.as_contract(&t.contract_id, || {
         niffyinsure::storage::set_claim(&t.env, &claim);
@@ -309,6 +311,7 @@ fn claim_with_disallowed_bound_asset_is_rejected() {
         policy_id: policy.policy_id,
         claimant: holder.clone(),
         amount: 5_000_000i128,
+        asset: t.token_a.clone(),
         details: SorobanString::from_str(&t.env, "mismatch test"),
         image_urls: Vec::new(&t.env),
         status: ClaimStatus::Approved,
@@ -321,6 +324,7 @@ fn claim_with_disallowed_bound_asset_is_rejected() {
         appeal_deadline_ledger: 0,
         appeal_approve_votes: 0,
         appeal_reject_votes: 0,
+        status_history: Vec::new(&t.env),
     };
     t.env.as_contract(&t.contract_id, || {
         niffyinsure::storage::set_claim(&t.env, &claim);
