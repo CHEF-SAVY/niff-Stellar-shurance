@@ -87,6 +87,18 @@ pub const RATE_LIMIT_WINDOW_LEDGERS: u32 = LEDGERS_PER_DAY; // 17_280
 /// Quote validity: how many ledgers a `generate_premium` result stays valid.
 pub const QUOTE_TTL_LEDGERS: u32 = 100;
 
+/// Appeal open window: how many ledgers after rejection a claimant may open an appeal.
+/// ~3 days.  Anchored at the ledger that produced the Rejected status.
+pub const APPEAL_OPEN_WINDOW_LEDGERS: u32 = 3 * LEDGERS_PER_DAY; // 51_840
+
+/// Appeal vote window: how many ledgers voters have to vote on an appeal.
+/// ~7 days (same duration as the base claim vote window).
+pub const APPEAL_VOTE_WINDOW_LEDGERS: u32 = 7 * LEDGERS_PER_DAY; // 120_960
+
+/// Hard cap on appeals per claim.  Prevents infinite ping-pong.
+/// Claimants get exactly one appeal after a Rejected outcome.
+pub const MAX_APPEALS_PER_CLAIM: u32 = 1;
+
 // ── Core window helpers ───────────────────────────────────────────────────────
 
 /// Returns `true` if `now` falls in the half-open interval `[start, end)`.
@@ -103,6 +115,7 @@ pub fn is_within_window(now: u32, start: u32, end: u32) -> bool {
 
 /// Returns `true` if the window `[start, end)` has not yet started.
 #[inline]
+#[allow(dead_code)]
 pub fn is_before_window(now: u32, start: u32) -> bool {
     now < start
 }
@@ -121,6 +134,7 @@ pub fn is_expired(now: u32, end: u32) -> bool {
 /// including) the expiry ledger.  Attempting to renew at or after `end` is
 /// rejected — the policy has already lapsed.
 #[inline]
+#[allow(dead_code)]
 pub fn is_in_renewal_window(now: u32, end: u32, window: u32) -> bool {
     let renewal_start = end.saturating_sub(window);
     is_within_window(now, renewal_start, end)
@@ -154,6 +168,7 @@ pub fn is_rate_limit_elapsed(now: u32, last_filed_at: u32, rate_limit_window: u3
 
 /// Ledgers remaining until `end` from `now`.  Returns 0 if already expired.
 #[inline]
+#[allow(dead_code)]
 pub fn ledgers_remaining(now: u32, end: u32) -> u32 {
     end.saturating_sub(now)
 }
@@ -163,6 +178,7 @@ pub fn ledgers_remaining(now: u32, end: u32) -> u32 {
 /// Multiply `ledgers_remaining` by `SECS_PER_LEDGER`.  The result may drift
 /// by ±20% from wall-clock time depending on network conditions.
 #[inline]
+#[allow(dead_code)]
 pub fn approx_secs_remaining(now: u32, end: u32) -> u32 {
     ledgers_remaining(now, end).saturating_mul(SECS_PER_LEDGER)
 }

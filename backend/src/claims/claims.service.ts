@@ -1,214 +1,160 @@
-import { Injectable, NotFoundException, Logger } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { Prisma } from '@prisma/client';
+import { SorobanService } from '../rpc/soroban.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../cache/redis.service';
 import { SanitizationService } from './sanitization.service';
-import { ConfigService } from '@nestjs/config';
-import { Prisma } from '@prisma/client';
 import {
-  ClaimsListResponseDto,
   ClaimDetailResponseDto,
   ClaimMetadataDto,
-  VoteTalliesDto,
-  QuorumProgressDto,
-  DeadlineDto,
-  SanitizedEvidenceDto,
+  ClaimsListResponseDto,
   ConsistencyMetadataDto,
+  DeadlineDto,
+  QuorumProgressDto,
+  SanitizedEvidenceDto,
+  VoteTalliesDto,
 } from './dto/claim.dto';
+import {
+  buildKeysetWhere,
+  buildNextCursor,
+  clampLimit,
+} from '../helpers/pagination';
 
 interface ListClaimsParams {
-  page: number;
-  limit: number;
+  after?: string;
+  limit?: number;
   status?: string;
 }
+
+const VOTE_WINDOW_LEDGERS = 120_960;
+const SECONDS_PER_LEDGER = 5;
+
+type ClaimWithVotes = Prisma.ClaimGetPayload<{
+  include: {
+    votes: { select: { vote: true } };
+  };
+}>;
 
 @Injectable()
 export class ClaimsService {
   private readonly logger = new Logger(ClaimsService.name);
   private readonly cacheTtl: number;
   private readonly ipfsGateway: string;
-  private readonly maxAcceptableLag = 5; // ledgers
+  private readonly maxAcceptableLag = 5;
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly redis: RedisService,
     private readonly sanitization: SanitizationService,
     private readonly config: ConfigService,
+    private readonly soroban: SorobanService,
   ) {
     this.cacheTtl = this.config.get<number>('CACHE_TTL_SECONDS', 60);
     this.ipfsGateway = this.config.get<string>('IPFS_GATEWAY', 'https://ipfs.io');
   }
 
-  /**
-   * List all claims with aggregated data and pagination
-   * Uses optimized queries with Prisma relations
-   */
   async listClaims(params: ListClaimsParams): Promise<ClaimsListResponseDto> {
-    const { page, limit, status } = params;
-    const skip = (page - 1) * limit;
-
-    // Try cache first
-    const cacheKey = `claims:list:${page}:${limit}:${status || 'all'}`;
+    const { after, status } = params;
+    const limit = clampLimit(params.limit);
+    const cacheKey = `claims:list:${after ?? 'start'}:${limit}:${status ?? 'all'}`;
     const cached = await this.redis.get<ClaimsListResponseDto>(cacheKey);
+
     if (cached) {
       this.logger.debug(`Cache hit for ${cacheKey}`);
       return cached;
     }
 
-    // Get current ledger info for consistency
-    const indexerState = await this.prisma.indexerState.findFirst({
-      orderBy: { lastLedger: 'desc' },
-    });
-    const lastLedger = indexerState?.lastLedger || 0;
+    const lastLedger = await this.getLastLedger();
+    const statusFilter = status
+      ? { status: status.toUpperCase() as 'PENDING' | 'APPROVED' | 'PAID' | 'REJECTED' }
+      : {};
+    const keysetWhere = buildKeysetWhere(after);
+    const where: Prisma.ClaimWhereInput = {
+      ...statusFilter,
+      ...(keysetWhere ?? {}),
+    };
 
-    // Build where clause
-    const where = status 
-      ? { status: status.toUpperCase() as 'PENDING' | 'APPROVED' | 'REJECTED' }
-      : undefined;
-
-    // Fetch claims with related data
     const [claims, total] = await Promise.all([
       this.prisma.claim.findMany({
         where,
-        include: {
-          votes: {
-            select: { vote: true },
-          },
-          policy: {
-            select: {
-              votingDeadlineLedger: true,
-              votingDeadlineTime: true,
-              requiredVotes: true,
-            },
-          },
-        },
-        orderBy: { createdAt: 'desc' },
-        skip,
+        include: { votes: { select: { vote: true } } },
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
         take: limit,
       }),
-      this.prisma.claim.count({ where }),
+      this.prisma.claim.count({ where: statusFilter }),
     ]);
 
-    // Transform to response format
-    const data = claims.map((claim) => this.transformClaim(claim, lastLedger));
-    
     const response: ClaimsListResponseDto = {
-      data,
+      data: claims.map((claim) => this.transformClaim(claim, lastLedger)),
       pagination: {
-        page,
-        limit,
+        next_cursor: buildNextCursor(claims, limit, total),
         total,
-        totalPages: Math.ceil(total / limit),
-        hasNext: skip + data.length < total,
       },
     };
 
-    // Cache the response
     await this.redis.set(cacheKey, response, this.cacheTtl);
     return response;
   }
 
-  /**
-   * Get claims that the user has not voted on yet
-   */
   async getClaimsNeedingVote(
     walletAddress: string,
     params: ListClaimsParams,
   ): Promise<ClaimsListResponseDto> {
-    const { page, limit } = params;
-    const skip = (page - 1) * limit;
+    const { after } = params;
+    const limit = clampLimit(params.limit);
+    const lastLedger = await this.getLastLedger();
 
-    const indexerState = await this.prisma.indexerState.findFirst({
-      orderBy: { lastLedger: 'desc' },
-    });
-    const lastLedger = indexerState?.lastLedger || 0;
-
-    // Get IDs of claims user has already voted on
     const votedClaimIds = await this.prisma.vote.findMany({
       where: { voterAddress: walletAddress.toLowerCase() },
       select: { claimId: true },
     });
-    const votedIds = votedClaimIds.map(v => v.claimId);
+    const votedIds = votedClaimIds.map((v) => v.claimId);
+    const keysetWhere = buildKeysetWhere(after);
 
-    // Get pending claims where voting is still open and user hasn't voted
-    const [claims, total] = await Promise.all([
+    const baseWhere: Prisma.ClaimWhereInput = {
+      status: 'PENDING',
+      ...(votedIds.length > 0 ? { id: { notIn: votedIds } } : {}),
+    };
+
+    const [allOpen, page] = await Promise.all([
+      this.prisma.claim.count({ where: baseWhere }),
       this.prisma.claim.findMany({
-        where: {
-          status: 'PENDING',
-          policy: {
-            votingDeadlineLedger: { gt: lastLedger },
-          },
-          id: { notIn: votedIds.length > 0 ? votedIds : undefined },
-        },
-        include: {
-          votes: {
-            select: { vote: true },
-          },
-          policy: {
-            select: {
-              votingDeadlineLedger: true,
-              votingDeadlineTime: true,
-              requiredVotes: true,
-            },
-          },
-        },
-        orderBy: { createdAt: 'desc' },
-        skip,
+        where: { ...baseWhere, ...(keysetWhere ?? {}) },
+        include: { votes: { select: { vote: true } } },
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
         take: limit,
-      }),
-      this.prisma.claim.count({
-        where: {
-          status: 'PENDING',
-          policy: {
-            votingDeadlineLedger: { gt: lastLedger },
-          },
-          id: { notIn: votedIds.length > 0 ? votedIds : undefined },
-        },
       }),
     ]);
 
-    const data = claims.map((claim) => this.transformClaim(claim, lastLedger));
+    const openClaims = page.filter(
+      (claim) => this.getVotingDeadlineLedger(claim.createdAtLedger) > lastLedger,
+    );
 
     return {
-      data,
+      data: openClaims.map((claim) => this.transformClaim(claim, lastLedger)),
       pagination: {
-        page,
-        limit,
-        total,
-        totalPages: Math.ceil(total / limit),
-        hasNext: skip + data.length < total,
+        next_cursor: buildNextCursor(openClaims, limit, allOpen),
+        total: allOpen,
       },
     };
   }
 
-  /**
-   * Get detailed claim view by ID
-   */
   async getClaimById(id: number, walletAddress?: string): Promise<ClaimDetailResponseDto> {
     const cacheKey = `claims:detail:${id}`;
     const cached = await this.redis.get<ClaimDetailResponseDto>(cacheKey);
-    
+
     if (cached && !walletAddress) {
       this.logger.debug(`Cache hit for ${cacheKey}`);
       return cached;
     }
 
-    const indexerState = await this.prisma.indexerState.findFirst({
-      orderBy: { lastLedger: 'desc' },
-    });
-    const lastLedger = indexerState?.lastLedger || 0;
-
+    const lastLedger = await this.getLastLedger();
     const claim = await this.prisma.claim.findUnique({
       where: { id },
       include: {
         votes: {
           select: { vote: true },
-        },
-        policy: {
-          select: {
-            votingDeadlineLedger: true,
-            votingDeadlineTime: true,
-            requiredVotes: true,
-          },
         },
       },
     });
@@ -218,71 +164,48 @@ export class ClaimsService {
     }
 
     const response = this.transformClaim(claim, lastLedger);
-    
+
     if (!walletAddress) {
       await this.redis.set(cacheKey, response, this.cacheTtl);
+      return response;
     }
 
-    if (walletAddress) {
-      return this.enrichWithUserVote(response, walletAddress);
-    }
-
-    return response;
+    return this.enrichWithUserVote(response, walletAddress);
   }
 
-  /**
-   * Transform claim to response DTO
-   */
-  private transformClaim(
-    claim: Prisma.ClaimGetPayload<{
-      include: {
-        votes: { select: { vote: true } };
-        policy: { 
-          select: {
-            votingDeadlineLedger: true;
-            votingDeadlineTime: true;
-            requiredVotes: true;
-          }
-        };
-      };
-    }>,
-    lastLedger: number,
-  ): ClaimDetailResponseDto {
-    // Calculate vote tallies
-    const yesVotes = claim.votes.filter(v => v.vote === 'YES').length;
-    const noVotes = claim.votes.filter(v => v.vote === 'NO').length;
-    const totalVotes = claim.votes.length;
-    
-    const currentLedger = lastLedger;
-    const isOpen = claim.policy.votingDeadlineLedger > currentLedger;
-    
-    // Calculate remaining seconds (Stellar avg ~5 seconds per ledger)
-    let remainingSeconds: number | undefined;
-    if (isOpen) {
-      const ledgersRemaining = claim.policy.votingDeadlineLedger - currentLedger;
-      remainingSeconds = ledgersRemaining * 5;
-    }
+  private async getLastLedger(): Promise<number> {
+    const indexerState = await this.prisma.indexerState.findFirst({
+      orderBy: { lastLedger: 'desc' },
+    });
+    return indexerState?.lastLedger || 0;
+  }
 
-    // Calculate quorum percentage
-    const requiredVotes = claim.policy.requiredVotes;
-    const quorumPercentage = requiredVotes > 0 
-      ? Math.min(100, Math.round((totalVotes / requiredVotes) * 100))
-      : 0;
-
-    // Sanitize evidence hash
-    const sanitizedHash = this.sanitization.sanitizeIpfsHash(claim.evidenceHash || '');
-
-    // Calculate indexer lag
-    const indexerLag = lastLedger - claim.updatedAtLedger;
+  private transformClaim(claim: ClaimWithVotes, lastLedger: number): ClaimDetailResponseDto {
+    const yesVotes = claim.votes.filter((vote) => vote.vote === 'APPROVE').length;
+    const noVotes = claim.votes.filter((vote) => vote.vote === 'REJECT').length;
+    const totalVotes = yesVotes + noVotes;
+    const votingDeadlineLedger = this.getVotingDeadlineLedger(claim.createdAtLedger);
+    const votingDeadlineTime = new Date(
+      claim.createdAt.getTime() + VOTE_WINDOW_LEDGERS * SECONDS_PER_LEDGER * 1000,
+    );
+    const isOpen = votingDeadlineLedger > lastLedger;
+    const remainingSeconds = isOpen
+      ? (votingDeadlineLedger - lastLedger) * SECONDS_PER_LEDGER
+      : undefined;
+    const requiredVotes = Math.max(1, Math.floor(totalVotes / 2) + 1);
+    const sanitizedHash = this.sanitization.sanitizeIpfsHash(
+      this.extractEvidenceHash(claim.imageUrls),
+    );
+    const indexerLag = Math.max(0, lastLedger - claim.updatedAtLedger);
 
     return {
       metadata: {
         id: claim.id,
         policyId: claim.policyId,
         creatorAddress: this.sanitization.sanitizeWalletAddress(claim.creatorAddress),
-        status: claim.status.toLowerCase() as 'pending' | 'approved' | 'rejected',
+        status: claim.status.toLowerCase() as 'pending' | 'approved' | 'paid' | 'rejected',
         amount: claim.amount,
-        description: claim.description 
+        description: claim.description
           ? this.sanitization.sanitizeDescription(claim.description)
           : undefined,
         evidenceHash: sanitizedHash,
@@ -298,17 +221,17 @@ export class ClaimsService {
       quorum: {
         required: requiredVotes,
         current: totalVotes,
-        percentage: quorumPercentage,
-        reached: totalVotes >= requiredVotes,
+        percentage: Math.min(100, Math.round((totalVotes / requiredVotes) * 100)),
+        reached: claim.isFinalized || Math.max(yesVotes, noVotes) >= requiredVotes,
       } as QuorumProgressDto,
       deadline: {
-        votingDeadlineLedger: claim.policy.votingDeadlineLedger,
-        votingDeadlineTime: claim.policy.votingDeadlineTime,
+        votingDeadlineLedger,
+        votingDeadlineTime,
         isOpen,
         remainingSeconds,
       } as DeadlineDto,
       evidence: {
-        gatewayUrl: `${this.ipfsGateway}/ipfs/${sanitizedHash}`,
+        gatewayUrl: sanitizedHash ? `${this.ipfsGateway}/ipfs/${sanitizedHash}` : '',
         hash: sanitizedHash,
       } as SanitizedEvidenceDto,
       consistency: {
@@ -320,9 +243,26 @@ export class ClaimsService {
     };
   }
 
-  /**
-   * Enrich claim with user's vote information
-   */
+  private getVotingDeadlineLedger(createdAtLedger: number): number {
+    return createdAtLedger + VOTE_WINDOW_LEDGERS;
+  }
+
+  private extractEvidenceHash(imageUrls: string[]): string {
+    for (const imageUrl of imageUrls) {
+      const directHash = this.sanitization.sanitizeIpfsHash(imageUrl);
+      if (directHash) {
+        return directHash;
+      }
+
+      const match = imageUrl.match(/\/ipfs\/([^/?#]+)/i);
+      if (match?.[1]) {
+        return match[1];
+      }
+    }
+
+    return '';
+  }
+
   private async enrichWithUserVote(
     claim: ClaimDetailResponseDto,
     walletAddress: string,
@@ -336,20 +276,42 @@ export class ClaimsService {
 
     if (userVote) {
       claim.userHasVoted = true;
-      claim.userVote = userVote.vote.toLowerCase() as 'yes' | 'no';
+      claim.userVote = userVote.vote === 'APPROVE' ? 'yes' : 'no';
     }
 
     return claim;
   }
 
-  /**
-   * Invalidate cache for a specific claim or all claims
-   */
   async invalidateCache(claimId?: number): Promise<void> {
     if (claimId) {
       await this.redis.del(`claims:detail:${claimId}`);
     }
     await this.redis.delPattern('claims:list:*');
     this.logger.log(`Cache invalidated for claim ${claimId || 'all'}`);
+  }
+
+  /**
+   * Build an unsigned file_claim transaction
+   */
+  async buildTransaction(args: {
+    holder: string;
+    policyId: number;
+    amount: bigint;
+    details: string;
+    imageUrls: string[];
+  }) {
+    return this.soroban.buildFileClaimTransaction(args);
+  }
+
+  /**
+   * Submit a signed transaction
+   */
+  async submitTransaction(transactionXdr: string) {
+    const result = await this.soroban.submitTransaction(transactionXdr);
+    
+    // Invalidate claims list cache so the new claim appears
+    await this.invalidateCache();
+    
+    return result;
   }
 }

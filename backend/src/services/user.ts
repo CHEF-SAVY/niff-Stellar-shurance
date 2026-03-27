@@ -1,6 +1,6 @@
 import bcrypt from 'bcrypt';
 import { v4 as uuidv4 } from 'uuid';
-import { StaffUser, StaffRole, LoginRequest, LoginResponse } from '../types';
+import { StaffUser, StaffRole } from '../types';
 import config from '../config';
 
 /**
@@ -117,7 +117,10 @@ export class UserService {
    * Get all users (for admin management - exclude passwords)
    */
   async getAllUsers(): Promise<Omit<StaffUser, 'passwordHash'>[]> {
-    return Array.from(users.values()).map(({ passwordHash, ...user }) => user);
+    return Array.from(users.values()).map(({ passwordHash, ...user }) => {
+      void passwordHash;
+      return user;
+    });
   }
 
   /**

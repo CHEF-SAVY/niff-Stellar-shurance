@@ -15,6 +15,10 @@ import { ClaimsModule } from './claims/claims.module';
 import { QuoteModule } from './quote/quote.module';
 import { PolicyModule } from './policy/policy.module';
 import { NotificationsModule } from './notifications/notifications.module';
+import { TxModule } from './tx/tx.module';
+import { FeatureFlagsModule } from './feature-flags/feature-flags.module';
+import { OracleHooksController } from './experimental/oracle-hooks.controller';
+import { BetaCalculatorsController } from './experimental/beta-calculators.controller';
 
 @Module({
   imports: [
@@ -40,7 +44,9 @@ import { NotificationsModule } from './notifications/notifications.module';
     QuoteModule,
     PolicyModule,
     NotificationsModule,
+    TxModule,
+    FeatureFlagsModule,
   ],
+  controllers: [OracleHooksController, BetaCalculatorsController],
 })
 export class AppModule {}
-

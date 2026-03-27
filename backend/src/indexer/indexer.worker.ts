@@ -37,8 +37,9 @@ export class IndexerWorker implements OnModuleInit {
             this.logger.debug(`Processed ${result.processed} events, lag: ${result.lag} ledgers`);
         }
       } while (result.processed > 0);
-    } catch (err: any) {
-      this.logger.error(`Indexer Worker Error: ${err.message}`, err.stack);
+    } catch (err: unknown) {
+      const error = err instanceof Error ? err : new Error(String(err));
+      this.logger.error(`Indexer Worker Error: ${error.message}`, error.stack);
       // We don't rethrow here because the loop handles scheduling the next attempt
     } finally {
       this.isProcessing = false;

@@ -25,3 +25,8 @@ export interface NotificationRecord {
   sentAt?: string;
   error?: string;
 }
+
+export interface NotificationResult {
+  claimId: string;
+  records: NotificationRecord[];
+}

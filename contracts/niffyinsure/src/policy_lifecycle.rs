@@ -23,6 +23,7 @@ pub enum PolicyError {
     HolderMismatch = 10,
 }
 
+#[allow(dead_code)]
 pub fn initiate_policy(
     env: &Env,
     holder: Address,
@@ -61,9 +62,11 @@ pub fn initiate_policy(
         is_active: true,
         start_ledger: now,
         end_ledger,
+        asset: storage::get_token(env),
         terminated_at_ledger: 0,
         termination_reason: TerminationReason::None,
         terminated_by_admin: false,
+        strike_count: 0,
     };
 
     validate::check_policy(&policy).map_err(|e| match e {
@@ -73,7 +76,7 @@ pub fn initiate_policy(
         _ => PolicyError::InvalidCoverage,
     })?;
 
-    storage::set_policy(env, &policy);
+    storage::set_policy(env, &holder, policy_id, &policy);
     storage::increment_holder_active_policies(env, &holder);
     storage::voters_ensure_holder(env, &holder);
 
@@ -141,10 +144,10 @@ fn terminate_inner(
     let now = env.ledger().sequence();
     policy.is_active = false;
     policy.terminated_at_ledger = now;
-    policy.termination_reason = reason;
+    policy.termination_reason = reason.clone();
     policy.terminated_by_admin = by_admin;
 
-    storage::set_policy(env, &policy);
+    storage::set_policy(env, holder, policy_id, &policy);
     storage::decrement_holder_active_policies(env, holder);
     if storage::get_holder_active_policy_count(env, holder) == 0 {
         storage::voters_remove_holder(env, holder);
@@ -210,5 +213,10 @@ fn termination_reason_tag(reason: TerminationReason) -> u32 {
         TerminationReason::FraudOrMisrepresentation => 4,
         TerminationReason::RegulatoryAction => 5,
         TerminationReason::AdminOverride => 6,
+        // 7 = ExcessiveRejections: set by the claims engine via on_reject,
+        // not by the policy-lifecycle termination flow. Included here for
+        // completeness; PolicyTerminated is not normally emitted for this
+        // reason — PolicyDeactivated (from claim.rs) is the canonical event.
+        TerminationReason::ExcessiveRejections => 7,
     }
 }

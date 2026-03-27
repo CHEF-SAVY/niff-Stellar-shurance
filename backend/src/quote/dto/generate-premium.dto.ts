@@ -26,25 +26,25 @@ export class GeneratePremiumDto {
   @IsEnum(PolicyTypeEnum, {
     message: "policy_type must be one of: 'Auto', 'Health', 'Property'",
   })
-  policy_type: PolicyTypeEnum;
+  policy_type!: PolicyTypeEnum;
 
   @ApiProperty({ enum: RegionTierEnum })
   @IsEnum(RegionTierEnum, {
     message: "region must be one of: 'Low', 'Medium', 'High'",
   })
-  region: RegionTierEnum;
+  region!: RegionTierEnum;
 
   @ApiProperty({ minimum: 1, maximum: 120, description: 'Policyholder age in years' })
   @IsInt()
   @Min(1)
   @Max(120)
-  age: number;
+  age!: number;
 
   @ApiProperty({ minimum: 1, maximum: 10, description: 'Risk score 1–10 (higher = riskier)' })
   @IsInt()
   @Min(1)
   @Max(10)
-  risk_score: number;
+  risk_score!: number;
 
   @ApiPropertyOptional({
     description:

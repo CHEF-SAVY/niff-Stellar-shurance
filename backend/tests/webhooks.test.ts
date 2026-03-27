@@ -32,8 +32,15 @@ interface TestResponse {
 
 let server: http.Server;
 let port: number;
+let consoleWarnSpy: jest.SpyInstance;
+let consoleInfoSpy: jest.SpyInstance;
+let consoleLogSpy: jest.SpyInstance;
 
 beforeAll((done) => {
+  consoleWarnSpy = jest.spyOn(console, "warn").mockImplementation(() => undefined);
+  consoleInfoSpy = jest.spyOn(console, "info").mockImplementation(() => undefined);
+  consoleLogSpy = jest.spyOn(console, "log").mockImplementation(() => undefined);
+
   server = http.createServer(app);
   server.listen(0, "127.0.0.1", () => {
     port = (server.address() as { port: number }).port;
@@ -41,7 +48,21 @@ beforeAll((done) => {
   });
 });
 
-afterAll((done) => server.close(done));
+afterAll(async () => {
+  await new Promise<void>((resolve, reject) => {
+    server.close((err) => {
+      if (err) {
+        reject(err);
+        return;
+      }
+      resolve();
+    });
+  });
+
+  consoleWarnSpy.mockRestore();
+  consoleInfoSpy.mockRestore();
+  consoleLogSpy.mockRestore();
+});
 
 beforeEach(() => {
   _resetIdempotencyStore();

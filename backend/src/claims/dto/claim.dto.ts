@@ -16,7 +16,7 @@ export class ClaimMetadataDto {
 
   @ApiProperty({ description: 'Current claim status' })
   @Expose()
-  status!: 'pending' | 'approved' | 'rejected';
+  status!: 'pending' | 'approved' | 'paid' | 'rejected';
 
   @ApiProperty({ description: 'Claim amount requested' })
   @Expose()
@@ -151,26 +151,24 @@ export class ClaimListItemDto {
   consistency!: ConsistencyMetadataDto;
 }
 
-export class PaginationDto {
-  @ApiProperty({ description: 'Current page number' })
+export class CursorPageDto {
+  @ApiProperty({
+    description:
+      'Opaque cursor to pass as `after` for the next page. Null when this is the last page.',
+    nullable: true,
+    example: 'eyJjcmVhdGVkQXQiOiIyMDI0LTAxLTAxVDAwOjAwOjAwLjAwMFoiLCJpZCI6NDJ9',
+  })
   @Expose()
-  page!: number;
+  next_cursor!: string | null;
 
-  @ApiProperty({ description: 'Items per page' })
-  @Expose()
-  limit!: number;
-
-  @ApiProperty({ description: 'Total items' })
+  @ApiProperty({
+    description:
+      'Total rows matching the filter before pagination. ' +
+      'Eventually consistent — may differ by ±1 under concurrent inserts.',
+    example: 42,
+  })
   @Expose()
   total!: number;
-
-  @ApiProperty({ description: 'Total pages' })
-  @Expose()
-  totalPages!: number;
-
-  @ApiProperty({ description: 'Has next page' })
-  @Expose()
-  hasNext!: boolean;
 }
 
 export class ClaimsListResponseDto {
@@ -178,9 +176,9 @@ export class ClaimsListResponseDto {
   @Expose()
   data!: ClaimListItemDto[];
 
-  @ApiProperty({ description: 'Pagination info', type: PaginationDto })
+  @ApiProperty({ description: 'Cursor pagination metadata', type: CursorPageDto })
   @Expose()
-  pagination!: PaginationDto;
+  pagination!: CursorPageDto;
 }
 
 export class ClaimDetailResponseDto extends ClaimListItemDto {

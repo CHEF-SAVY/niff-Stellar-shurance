@@ -34,6 +34,8 @@ import {
 } from './notification.templates';
 import { config } from '../config/env';
 
+const isTestEnv = process.env.NODE_ENV === 'test';
+
 // ── Idempotency store (in-memory; replace with Redis Set in production) ───────
 
 const sentSet = new Set<string>();
@@ -113,7 +115,10 @@ async function withRetry<T>(
 }
 
 function sleep(ms: number): Promise<void> {
-  return new Promise((r) => setTimeout(r, ms));
+  return new Promise((resolve) => {
+    const timer = setTimeout(resolve, ms);
+    timer.unref();
+  });
 }
 
 // ── Channel senders ───────────────────────────────────────────────────────────
@@ -205,7 +210,9 @@ export async function sendClaimNotifications(
       });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      console.error(`[notification] email failed for claim ${event.claimId}:`, msg);
+      if (!isTestEnv) {
+        console.error(`[notification] email failed for claim ${event.claimId}:`, msg);
+      }
       records.push({
         idempotencyKey: emailKey,
         channel: 'email',
@@ -242,7 +249,9 @@ export async function sendClaimNotifications(
       });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      console.error(`[notification] discord failed for claim ${event.claimId}:`, msg);
+      if (!isTestEnv) {
+        console.error(`[notification] discord failed for claim ${event.claimId}:`, msg);
+      }
       records.push({
         idempotencyKey: discordKey,
         channel: 'discord',
@@ -278,7 +287,9 @@ export async function sendClaimNotifications(
       });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      console.error(`[notification] telegram failed for claim ${event.claimId}:`, msg);
+      if (!isTestEnv) {
+        console.error(`[notification] telegram failed for claim ${event.claimId}:`, msg);
+      }
       records.push({
         idempotencyKey: telegramKey,
         channel: 'telegram',

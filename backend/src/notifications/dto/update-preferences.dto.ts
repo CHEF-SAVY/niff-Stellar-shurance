@@ -4,7 +4,7 @@ import { IsBoolean, IsEmail, IsOptional, IsString } from 'class-validator';
 export class UpdatePreferencesDto {
   @ApiProperty({ description: 'Opt in/out of email notifications' })
   @IsBoolean()
-  emailEnabled: boolean;
+  emailEnabled!: boolean;
 
   @ApiPropertyOptional({ description: 'Email address for notifications' })
   @IsOptional()
@@ -13,7 +13,7 @@ export class UpdatePreferencesDto {
 
   @ApiProperty({ description: 'Opt in/out of Discord DM notifications' })
   @IsBoolean()
-  discordEnabled: boolean;
+  discordEnabled!: boolean;
 
   @ApiPropertyOptional({ description: 'Discord user ID' })
   @IsOptional()
@@ -22,7 +22,7 @@ export class UpdatePreferencesDto {
 
   @ApiProperty({ description: 'Opt in/out of Telegram notifications' })
   @IsBoolean()
-  telegramEnabled: boolean;
+  telegramEnabled!: boolean;
 
   @ApiPropertyOptional({ description: 'Telegram chat ID' })
   @IsOptional()
@@ -31,11 +31,11 @@ export class UpdatePreferencesDto {
 }
 
 export class TriggerEventDto {
-  @ApiProperty() @IsString() claimId: string;
-  @ApiProperty() claimantPublicKey: string;
+  @ApiProperty() @IsString() claimId!: string;
+  @ApiProperty() claimantPublicKey!: string;
   @ApiProperty({ enum: ['Approved', 'Rejected'] })
   @IsString()
-  outcome: 'Approved' | 'Rejected';
-  @ApiProperty() policyId: number;
+  outcome!: 'Approved' | 'Rejected';
+  @ApiProperty() policyId!: number;
   @ApiPropertyOptional() @IsOptional() @IsString() finalizedAt?: string;
 }

@@ -11,17 +11,9 @@
 
 import { z } from 'zod';
 
-export const PolicyTypeSchema = z.enum(['Auto', 'Health', 'Property'], {
-  errorMap: () => ({
-    message: "policy_type must be one of: 'Auto', 'Health', 'Property'",
-  }),
-});
+export const PolicyTypeSchema = z.enum(['Auto', 'Health', 'Property']);
 
-export const RegionTierSchema = z.enum(['Low', 'Medium', 'High'], {
-  errorMap: () => ({
-    message: "region must be one of: 'Low', 'Medium', 'High'",
-  }),
-});
+export const RegionTierSchema = z.enum(['Low', 'Medium', 'High']);
 
 export const GeneratePremiumDtoSchema = z.object({
   /** Insurance coverage category. */

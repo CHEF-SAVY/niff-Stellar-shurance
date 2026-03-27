@@ -9,14 +9,153 @@
 // a terminal status (`Approved` / `Rejected`), so policy termination can block
 // or audit in-flight claims. Until `file_claim` ships, admins may use
 // `admin_set_open_claim_count` in tests or break-glass ops only.
+//
+// ── Rejection side-effects ─────────────────────────────────────────────────────
+//
+// When a claim reaches `ClaimStatus::Rejected` (via majority vote or deadline
+// finalization), `on_reject` is called to apply the following deterministic,
+// trustless consequences:
+//
+//   1. `StrikeIncremented` event  — increments the policy's `strike_count`
+//      and emits the new total so indexers can surface it to holders.
+//   2. `PolicyDeactivated` event  — emitted if `strike_count` reaches
+//      `STRIKE_DEACTIVATION_THRESHOLD`. The policy is set `is_active = false`
+//      and the voter registry is updated in the same ledger.
+//   3. `ClaimRejected` event      — authoritative rejection signal for indexers.
+//      Carries vote tallies so the UI can explain the outcome without querying
+//      separate storage.
+//
+// ── Guarantee: reject NEVER invokes payout ────────────────────────────────────
+//
+// `on_reject` performs no token transfers. The only token transfer in this
+// module is inside `payout`, which is exclusively called from `process_claim`.
+// `process_claim` guards on `claim.status == ClaimStatus::Approved`; a
+// `Rejected` claim will receive `Error::ClaimNotApproved` before any transfer
+// is attempted.
+//
+// ── Permanent auditability ────────────────────────────────────────────────────
+//
+// Rejected claim records are stored in `persistent` storage with TTL
+// extensions and remain readable indefinitely via `get_claim`. The `details`
+// field holds a brief description (≤ 256 chars); full allegation narratives
+// must NOT be stored on-chain — use IPFS/off-chain storage and reference via
+// `image_urls` or an off-chain indexer.
+//
+// ── Appeal window interaction ─────────────────────────────────────────────────
+//
+// Appeals are not implemented in this version. If added:
+//   - Auto-deactivation in `on_reject` should be conditional on
+//     `env.ledger().sequence() > appeal_deadline_ledger`.
+//   - A new `ClaimStatus::Appealed` would require composing cleanly with
+//     the existing terminal-state checks (`is_terminal()`).
+//   - The `PolicyDeactivated` and `StrikeIncremented` events carry enough
+//     context for an appeal system to reverse their effects off-chain.
+//
+// ── Governance risk documentation ─────────────────────────────────────────────
+//
+// Admin override path: the admin can call `admin_terminate_policy` with
+// `allow_open_claims = true`, which can terminate a policy while a claim is
+// in `Processing`. In that scenario the claim vote can still complete, but
+// `on_reject` will find `policy.is_active = false` and skip the deactivation
+// branch (policy already inactive). The `StrikeIncremented` and
+// `ClaimRejected` events still fire for auditability.
+//
+// Premium-extraction attack: an attacker cannot extract premiums via the
+// rejection path because `process_claim` is gated on `Approved` status. The
+// only way to get an `Approved` claim processed is through legitimate majority
+// or deadline-plurality approval, which is controlled by the DAO snapshot, not
+// the admin. The admin cannot flip a `Rejected` claim to `Approved`.
 use crate::{
-    events,
-    ledger,
-    storage,
-    types::{Claim, ClaimStatus, VoteOption},
+    ledger, storage,
+    types::{
+        Claim, ClaimProcessed, ClaimStatus, TerminationReason, VoteOption,
+        STRIKE_DEACTIVATION_THRESHOLD,
+    },
     validate::Error,
 };
-use soroban_sdk::{token, Address, Env, String, Vec};
+use soroban_sdk::{contractevent, Address, Env, String, Vec};
+
+// ── Events ────────────────────────────────────────────────────────────────────
+
+#[contractevent(topics = ["niffyinsure", "claim_filed"])]
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct ClaimFiled {
+    #[topic]
+    pub claim_id: u64,
+    pub holder: Address,
+}
+
+/// Emitted as the authoritative rejection signal. Indexers must consume this
+/// event (not poll storage) to drive user-facing messaging. The vote tallies
+/// are included so the UI can explain the outcome (e.g., "rejected 4–1").
+///
+/// Topic layout: ["niffyinsure", "claim_rejected", claim_id]
+/// Data: { policy_id, claimant, reject_votes, approve_votes, at_ledger }
+///
+/// NOTE: This event is NEVER emitted on the approve path. Its presence
+/// unambiguously signals rejection.
+#[contractevent(topics = ["niffyinsure", "claim_rejected"])]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ClaimRejected {
+    #[topic]
+    pub claim_id: u64,
+    pub policy_id: u32,
+    pub claimant: Address,
+    pub reject_votes: u32,
+    pub approve_votes: u32,
+    /// Ledger at which the claim was finalized as rejected.
+    pub at_ledger: u32,
+}
+
+/// Emitted every time a rejection increments the policy's strike counter.
+/// Indexers should use this event to notify holders of accumulating strikes
+/// before the threshold triggers deactivation.
+///
+/// Topic layout: ["niffyinsure", "strike_incremented", holder, policy_id]
+/// Data: { claim_id, strike_count }
+///
+/// `strike_count` is the NEW total after this increment (1-indexed).
+#[contractevent(topics = ["niffyinsure", "strike_incremented"])]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct StrikeIncremented {
+    #[topic]
+    pub holder: Address,
+    #[topic]
+    pub policy_id: u32,
+    pub claim_id: u64,
+    /// New cumulative strike count for this policy after this rejection.
+    pub strike_count: u32,
+}
+
+/// Emitted when a policy is automatically deactivated because its
+/// `strike_count` reached `STRIKE_DEACTIVATION_THRESHOLD`.
+///
+/// Topic layout: ["niffyinsure", "policy_deactivated", holder, policy_id]
+/// Data: { reason_code, at_ledger }
+///
+/// `reason_code` values:
+///   1 = ExcessiveRejections (strike threshold reached)
+///
+/// CENTRALIZATION NOTE: This event is emitted by the claims engine
+/// deterministically — no admin key is involved. An admin cannot prevent or
+/// reverse this deactivation via `process_claim` or any other entrypoint.
+/// The only admin avenue is `admin_terminate_policy` (which terminates before
+/// the threshold is reached) or a future contract upgrade.
+///
+/// APPEAL NOTE: If appeals are added, this event should be treated as
+/// "pending deactivation" until the appeal window closes, not as an
+/// immediate final state.
+#[contractevent(topics = ["niffyinsure", "policy_deactivated"])]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PolicyDeactivated {
+    #[topic]
+    pub holder: Address,
+    #[topic]
+    pub policy_id: u32,
+    /// 1 = ExcessiveRejections
+    pub reason_code: u32,
+    pub at_ledger: u32,
+}
 
 // ── file_claim ────────────────────────────────────────────────────────────────
 
@@ -35,7 +174,10 @@ pub fn file_claim(
     details: &String,
     image_urls: &Vec<String>,
 ) -> Result<u64, Error> {
-    let policy = storage::get_policy(env, holder, policy_id).ok_or(Error::ClaimNotFound)?;
+    // Check pause: claims are blocked if claims_paused is true
+    storage::assert_claims_not_paused(env);
+
+    let policy = storage::get_policy(env, holder, policy_id).ok_or(Error::PolicyNotFound)?;
 
     // Policy active window check using ledger helper.
     let now = env.ledger().sequence();
@@ -48,6 +190,10 @@ pub fn file_claim(
     }
     if !policy.is_active {
         return Err(Error::PolicyInactive);
+    }
+
+    if storage::has_open_claim(env, holder, policy_id) {
+        return Err(Error::DuplicateOpenClaim);
     }
 
     // Rate-limit check.
@@ -69,19 +215,27 @@ pub fn file_claim(
         details: details.clone(),
         image_urls: image_urls.clone(),
         status: ClaimStatus::Processing,
+        voting_deadline_ledger: now.saturating_add(ledger::VOTE_WINDOW_LEDGERS),
         approve_votes: 0,
         reject_votes: 0,
         filed_at: now,
-        paid_at: None,
+        appeal_open_deadline_ledger: 0,
+        appeals_count: 0,
+        appeal_deadline_ledger: 0,
+        appeal_approve_votes: 0,
+        appeal_reject_votes: 0,
     };
 
     storage::set_claim(env, &claim);
+    storage::set_open_claim(env, holder, policy_id, true);
     storage::snapshot_claim_voters(env, claim_id);
     storage::set_last_claim_ledger(env, holder, now);
 
-    // Hash the image URLs into a compact u64 for the event payload.
-    let image_hash = hash_image_urls(image_urls);
-    events::emit_claim_filed(env, claim_id, holder, policy_id, amount, image_hash, now);
+    ClaimFiled {
+        claim_id,
+        holder: holder.clone(),
+    }
+    .publish(env);
 
     Ok(claim_id)
 }
@@ -98,6 +252,9 @@ pub fn vote_on_claim(
     claim_id: u64,
     vote: &VoteOption,
 ) -> Result<ClaimStatus, Error> {
+    // Check pause: voting is blocked if claims_paused is true
+    storage::assert_claims_not_paused(env);
+
     let mut claim = storage::get_claim(env, claim_id).ok_or(Error::ClaimNotFound)?;
 
     if claim.status.is_terminal() {
@@ -129,21 +286,33 @@ pub fn vote_on_claim(
         VoteOption::Reject => claim.reject_votes += 1,
     }
 
-    events::emit_vote_cast(env, claim_id, voter, vote.clone(), claim.approve_votes, claim.reject_votes);
-
     // Auto-finalize on majority.
     let total = snapshot.len();
     let majority = total / 2 + 1;
     if claim.approve_votes >= majority {
         claim.status = ClaimStatus::Approved;
-        events::emit_claim_finalized(env, claim_id, ClaimStatus::Approved, claim.approve_votes, claim.reject_votes);
     } else if claim.reject_votes >= majority {
         claim.status = ClaimStatus::Rejected;
-        events::emit_claim_finalized(env, claim_id, ClaimStatus::Rejected, claim.approve_votes, claim.reject_votes);
+        claim.appeal_open_deadline_ledger = now.saturating_add(ledger::APPEAL_OPEN_WINDOW_LEDGERS);
     }
 
+    let newly_rejected = claim.status == ClaimStatus::Rejected;
+
+    if claim.status.is_terminal() {
+        storage::set_open_claim(env, &claim.claimant, claim.policy_id, false);
+    }
+
+    let status = claim.status.clone();
     storage::set_claim(env, &claim);
-    Ok(claim.status)
+
+    // Apply rejection side-effects after the claim record is persisted.
+    // on_reject emits ClaimRejected, StrikeIncremented, and (if threshold
+    // reached) PolicyDeactivated. It never transfers tokens.
+    if newly_rejected {
+        on_reject(env, &claim);
+    }
+
+    Ok(status)
 }
 
 // ── finalize_claim ────────────────────────────────────────────────────────────
@@ -153,6 +322,9 @@ pub fn vote_on_claim(
 /// Window check: `now >= filed_at + VOTE_WINDOW_LEDGERS` (via `ledger::is_vote_deadline_passed`).
 /// Plurality wins; tie resolves to Rejected.
 pub fn finalize_claim(env: &Env, claim_id: u64) -> Result<ClaimStatus, Error> {
+    // Check pause: finalization is blocked if claims_paused is true
+    storage::assert_claims_not_paused(env);
+
     let mut claim = storage::get_claim(env, claim_id).ok_or(Error::ClaimNotFound)?;
 
     if claim.status.is_terminal() {
@@ -164,66 +336,187 @@ pub fn finalize_claim(env: &Env, claim_id: u64) -> Result<ClaimStatus, Error> {
         return Err(Error::VotingWindowStillOpen);
     }
 
-    claim.status = if claim.approve_votes > claim.reject_votes {
-        ClaimStatus::Approved
+    let _newly_rejected;
+    if claim.approve_votes > claim.reject_votes {
+        claim.status = ClaimStatus::Approved;
+        _newly_rejected = false;
     } else {
         // Tie or reject plurality → Rejected (insurer wins tie).
-        ClaimStatus::Rejected
-    };
+        claim.status = ClaimStatus::Rejected;
+        claim.appeal_open_deadline_ledger = now.saturating_add(ledger::APPEAL_OPEN_WINDOW_LEDGERS);
+        _newly_rejected = true;
+    }
 
-    events::emit_claim_finalized(env, claim_id, claim.status.clone(), claim.approve_votes, claim.reject_votes);
+    let newly_rejected = claim.status == ClaimStatus::Rejected;
 
+    storage::set_open_claim(env, &claim.claimant, claim.policy_id, false);
+    let status = claim.status.clone();
     storage::set_claim(env, &claim);
-    Ok(claim.status)
+
+    // Apply rejection side-effects after the claim record is persisted.
+    if newly_rejected {
+        on_reject(env, &claim);
+    }
+
+    Ok(status)
 }
 
 // ── process_claim (admin payout trigger) ─────────────────────────────────────
 
+/// Trigger the payout for an approved claim.
+///
+/// INVARIANT: This function is the ONLY code path that transfers payout
+/// tokens. It is unconditionally gated on `claim.status == Approved`.
+/// A `Rejected` claim will never reach `payout()` — the guard below returns
+/// `Error::ClaimNotApproved` before any transfer is attempted.
+///
+/// This invariant is enforced structurally: `on_reject` does not call
+/// `payout`, and there is no entrypoint that transitions a `Rejected` claim
+/// to `Approved`.
 pub fn process_claim(env: &Env, claim_id: u64) -> Result<(), Error> {
     let mut claim = storage::get_claim(env, claim_id).ok_or(Error::ClaimNotFound)?;
 
     if claim.status == ClaimStatus::Paid {
         return Err(Error::AlreadyPaid);
     }
+    // SAFETY: Rejected and Processing claims are explicitly blocked here.
+    // No path can circumvent this guard to reach payout().
     if claim.status != ClaimStatus::Approved {
         return Err(Error::ClaimNotApproved);
     }
-    if claim.amount <= 0 {
-        return Err(Error::ClaimAmountZero);
-    }
 
-    // Verify the claim's asset is still allowlisted (admin may have removed it).
-    if !storage::is_allowed_asset(env, &claim.asset) {
+    payout(env, &claim)?;
+    claim.status = ClaimStatus::Paid;
+    storage::set_open_claim(env, &claim.claimant, claim.policy_id, false);
+    storage::set_claim(env, &claim);
+    Ok(())
+}
+
+// ── on_reject (centralized rejection side-effects) ────────────────────────────
+
+/// Apply all side-effects that must occur when a claim is rejected.
+///
+/// Called by both `vote_on_claim` (majority auto-finalize) and
+/// `finalize_claim` (deadline resolution). Must be called AFTER the claim
+/// record has been persisted with `ClaimStatus::Rejected`.
+///
+/// Side-effects (in emission order):
+///   1. `ClaimRejected`       — indexer signal; always emitted.
+///   2. `StrikeIncremented`   — policy strike counter incremented; always
+///      emitted even if the policy is already inactive (auditability).
+///   3. `PolicyDeactivated`   — emitted only when `strike_count` reaches
+///      `STRIKE_DEACTIVATION_THRESHOLD` AND the policy is currently active.
+///
+/// NO TOKEN TRANSFERS occur in this function.
+///
+/// If the policy record cannot be found (e.g., it was manually terminated and
+/// subsequently evicted from storage), `ClaimRejected` is still emitted and
+/// the function returns without error. Strike and deactivation events require
+/// the policy record.
+fn on_reject(env: &Env, claim: &Claim) {
+    let now = env.ledger().sequence();
+
+    // ── 1. ClaimRejected ─────────────────────────────────────────────────────
+    //
+    // Emit first so indexers always see a ClaimRejected before any policy
+    // side-effect events, establishing a clear causal ordering.
+    ClaimRejected {
+        claim_id: claim.claim_id,
+        policy_id: claim.policy_id,
+        claimant: claim.claimant.clone(),
+        reject_votes: claim.reject_votes,
+        approve_votes: claim.approve_votes,
+        at_ledger: now,
+    }
+    .publish(env);
+
+    // ── 2. StrikeIncremented + (optional) PolicyDeactivated ──────────────────
+    //
+    // Best-effort: if the policy record is missing (manual termination + TTL
+    // eviction), skip strike and deactivation. ClaimRejected has already fired.
+    let Some(mut policy) = storage::get_policy(env, &claim.claimant, claim.policy_id) else {
+        return;
+    };
+
+    policy.strike_count = policy.strike_count.saturating_add(1);
+
+    StrikeIncremented {
+        holder: claim.claimant.clone(),
+        policy_id: claim.policy_id,
+        claim_id: claim.claim_id,
+        strike_count: policy.strike_count,
+    }
+    .publish(env);
+
+    // ── 3. PolicyDeactivated ─────────────────────────────────────────────────
+    //
+    // Deactivate only if the policy is currently active AND the strike count
+    // has reached the threshold. A policy already deactivated (e.g., by the
+    // admin or a prior threshold breach) is not touched again — no double
+    // deactivation.
+    if policy.strike_count >= STRIKE_DEACTIVATION_THRESHOLD && policy.is_active {
+        policy.is_active = false;
+        policy.terminated_at_ledger = now;
+        policy.termination_reason = TerminationReason::ExcessiveRejections;
+        policy.terminated_by_admin = false;
+
+        // Persist policy state change before emitting the event so any
+        // re-entrant read sees the correct state.
+        storage::set_policy(env, &claim.claimant, claim.policy_id, &policy);
+
+        // Update voter registry: decrement active count and remove from the
+        // live voter list if this was the holder's last active policy.
+        storage::decrement_holder_active_policies(env, &claim.claimant);
+        if storage::get_holder_active_policy_count(env, &claim.claimant) == 0 {
+            storage::voters_remove_holder(env, &claim.claimant);
+        }
+
+        PolicyDeactivated {
+            holder: claim.claimant.clone(),
+            policy_id: claim.policy_id,
+            reason_code: 1, // 1 = ExcessiveRejections
+            at_ledger: now,
+        }
+        .publish(env);
+    } else {
+        // Strike did not trigger deactivation — persist the incremented count.
+        storage::set_policy(env, &claim.claimant, claim.policy_id, &policy);
+    }
+}
+
+// ── Internal helpers ──────────────────────────────────────────────────────────
+
+fn payout(env: &Env, claim: &Claim) -> Result<(), Error> {
+    let policy =
+        storage::get_policy(env, &claim.claimant, claim.policy_id).ok_or(Error::PolicyNotFound)?;
+
+    if !storage::is_allowed_asset(env, &policy.asset) {
         return Err(Error::InvalidAsset);
     }
 
-    // Verify the claim's asset matches the policy's bound asset.
-    if let Some(policy) = storage::get_policy(env, &claim.claimant, claim.policy_id) {
-        if claim.asset != policy.asset {
-            return Err(Error::InvalidAsset);
-        }
-    }
-
-    let token_client = token::Client::new(env, &claim.asset);
-    let treasury = env.current_contract_address();
-
-    if token_client.balance(&treasury) < claim.amount {
+    if !crate::token::check_balance(env, &policy.asset, claim.amount) {
         return Err(Error::InsufficientTreasury);
     }
 
-    token_client.transfer(&treasury, &claim.claimant, &claim.amount);
+    crate::token::transfer(
+        env,
+        &policy.asset,
+        &env.current_contract_address(),
+        &claim.claimant,
+        claim.amount,
+    );
 
-    let now = env.ledger().sequence();
-    claim.status = ClaimStatus::Paid;
-    claim.paid_at = Some(now);
-    storage::set_claim(env, &claim);
-
-    events::emit_claim_paid(env, claim_id, &claim.claimant, claim.amount, &claim.asset);
+    ClaimProcessed {
+        claim_id: claim.claim_id,
+        recipient: claim.claimant.clone(),
+        amount: claim.amount,
+    }
+    .publish(env);
 
     Ok(())
 }
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
+// ── Public read helpers ───────────────────────────────────────────────────────
 
 pub fn get_claim(env: &Env, claim_id: u64) -> Result<Claim, Error> {
     storage::get_claim(env, claim_id).ok_or(Error::ClaimNotFound)

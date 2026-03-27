@@ -11,8 +11,7 @@
 use soroban_sdk::{contractclient, Address, Env};
 
 use crate::{
-    premium,
-    storage,
+    premium, storage,
     types::{AgeBand, CoverageType, PremiumQuote, RegionTier, RiskInput},
     validate::Error,
 };
@@ -67,6 +66,7 @@ pub struct CalcResult {
 
 /// Generated client for the PremiumCalculator contract.
 #[contractclient(name = "PremiumCalculatorClient")]
+#[allow(dead_code)]
 pub trait PremiumCalculatorTrait {
     fn compute(env: Env, input: CalcInput) -> Result<CalcResult, soroban_sdk::Error>;
     fn get_version(env: Env) -> u32;

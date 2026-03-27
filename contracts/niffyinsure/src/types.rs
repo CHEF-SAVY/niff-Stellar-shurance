@@ -1,4 +1,4 @@
-use soroban_sdk::{contracttype, Address, Map, String, Vec};
+use soroban_sdk::{contractevent, contracttype, Address, Bytes, Map, String, Vec};
 
 // ── Field size limits ─────────────────────────────────────────────────────────
 pub const DETAILS_MAX_LEN: u32 = 256;
@@ -6,6 +6,24 @@ pub const IMAGE_URL_MAX_LEN: u32 = 128;
 pub const IMAGE_URLS_MAX: u32 = 5;
 pub const REASON_MAX_LEN: u32 = 128;
 pub const SAFETY_SCORE_MAX: u32 = 100;
+
+// ── Rejection side-effect thresholds ─────────────────────────────────────────
+//
+// GOVERNANCE NOTE: This constant is the only on-chain parameter controlling
+// automatic policy deactivation. Changing it requires a contract upgrade and
+// cannot be altered by the admin at runtime — removing an avenue for
+// admin-only extraction via strike-count manipulation.
+//
+// LEGAL NOTE: Product/legal must sign off on the strike threshold before
+// mainnet deployment. Three rejections is a conservative starting point.
+// The threshold intentionally errs toward coverage preservation; false
+// positives (legitimate holders de-activated) are harder to recover from
+// than false negatives (fraudulent holders retained until human review).
+//
+// APPEAL INTERACTION: If an appeal window is added later, auto-deactivation
+// should be deferred until the appeal deadline passes. Implement by adding a
+// `deactivation_pending_until_ledger: u32` field to Policy and skipping the
+// `is_active = false` write until that ledger is reached.
 
 // ── Ledger window constants (re-exported from ledger.rs for ABI visibility) ───
 //
@@ -16,10 +34,27 @@ pub const SAFETY_SCORE_MAX: u32 = 100;
 // Conversion: 1 ledger ≈ 5 s on Stellar Mainnet (Protocol 20+).
 // See: https://developers.stellar.org/docs/learn/fundamentals/stellar-consensus-protocol
 pub use crate::ledger::{
-    LEDGERS_PER_DAY, LEDGERS_PER_HOUR, LEDGERS_PER_MIN, LEDGERS_PER_WEEK,
-    POLICY_DURATION_LEDGERS, QUOTE_TTL_LEDGERS, RATE_LIMIT_WINDOW_LEDGERS,
-    RENEWAL_WINDOW_LEDGERS, SECS_PER_LEDGER, VOTE_WINDOW_LEDGERS,
+    APPEAL_OPEN_WINDOW_LEDGERS, APPEAL_VOTE_WINDOW_LEDGERS, LEDGERS_PER_DAY, LEDGERS_PER_HOUR,
+    LEDGERS_PER_MIN, LEDGERS_PER_WEEK, MAX_APPEALS_PER_CLAIM, POLICY_DURATION_LEDGERS,
+    QUOTE_TTL_LEDGERS, RATE_LIMIT_WINDOW_LEDGERS, RENEWAL_WINDOW_LEDGERS, SECS_PER_LEDGER,
+    VOTE_WINDOW_LEDGERS,
 };
+
+// ── Strike / rejection constants ──────────────────────────────────────────────
+
+/// Number of rejected claims that automatically deactivates a policy.
+///
+/// This is a **compile-time constant**, not a runtime admin parameter.  Admin
+/// cannot flip it post-deployment, which prevents governance gaming where a
+/// large voter bloc rejects claims to deactivate rival policies.
+///
+/// **Legal review:** Before changing this value, consult legal counsel on
+/// whether automatic policy cancellation triggers regulatory requirements
+/// (e.g., notice periods, appeal rights).
+///
+/// **Appeal interaction:** Deactivation triggered by reaching this threshold
+/// can be reversed by a successful appeal that decrements strikes back below it.
+pub const STRIKE_DEACTIVATION_THRESHOLD: u32 = 3;
 
 // ── Enums ─────────────────────────────────────────────────────────────────────
 
@@ -57,10 +92,19 @@ pub enum CoverageType {
 
 /// Claim lifecycle state machine.
 ///
-/// Transitions:
-///   Processing → Approved (majority approve vote or deadline plurality)
-///   Processing → Rejected (majority reject vote or deadline plurality/tie)
-///   Approved   → Paid     (admin calls process_claim)
+/// Base-flow transitions:
+///   Processing  → Approved      (majority approve vote or deadline plurality)
+///   Processing  → Rejected      (majority reject vote or deadline plurality/tie)
+///   Approved    → Paid          (admin calls process_claim)
+///
+/// Appeal-flow transitions (requires Rejected status + open appeal window):
+///   Rejected    → UnderAppeal   (claimant calls open_appeal within window)
+///   UnderAppeal → AppealApproved (majority approve appeal vote or deadline)
+///   UnderAppeal → AppealRejected (majority reject appeal vote or deadline)
+///   AppealApproved → Paid       (admin calls process_claim — same as Approved)
+///
+/// Terminal states (no further transitions): Paid, Rejected (after appeal window
+/// closes), AppealApproved (→ Paid only), AppealRejected.
 #[contracttype]
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub enum ClaimStatus {
@@ -69,11 +113,24 @@ pub enum ClaimStatus {
     Approved,
     Paid,
     Rejected,
+    /// Claimant has opened an appeal; fresh vote round in progress.
+    UnderAppeal,
+    /// Appeal vote resolved in claimant's favour; awaits admin payout.
+    AppealApproved,
+    /// Appeal vote rejected; claim is permanently closed.
+    AppealRejected,
 }
 
 impl ClaimStatus {
     pub fn is_terminal(&self) -> bool {
-        matches!(self, ClaimStatus::Approved | ClaimStatus::Paid | ClaimStatus::Rejected)
+        matches!(
+            self,
+            ClaimStatus::Approved
+                | ClaimStatus::Paid
+                | ClaimStatus::Rejected
+                | ClaimStatus::AppealApproved
+                | ClaimStatus::AppealRejected
+        )
     }
 }
 
@@ -84,6 +141,16 @@ pub enum VoteOption {
     Reject,
 }
 
+/// Reason for policy termination.
+///
+/// GOVERNANCE NOTE: `ExcessiveRejections` is set by the claims engine
+/// automatically when `strike_count` reaches `STRIKE_DEACTIVATION_THRESHOLD`.
+/// All other variants require an explicit holder or admin action.
+///
+/// CENTRALIZATION RISK: `AdminOverride` allows the admin to terminate any
+/// policy for any reason at any time. This is a privileged operation that
+/// bypasses normal holder protections. Consider a time-lock or multi-sig
+/// requirement before using this variant in production.
 #[contracttype]
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub enum TerminationReason {
@@ -94,6 +161,16 @@ pub enum TerminationReason {
     FraudOrMisrepresentation,
     RegulatoryAction,
     AdminOverride,
+    /// Automatically set when `Policy.strike_count` reaches
+    /// `STRIKE_DEACTIVATION_THRESHOLD` consecutive rejections.
+    /// No admin intervention is required or possible to prevent this;
+    /// the transition is deterministic and trustless.
+    ///
+    /// APPEAL NOTE: If an appeal window is introduced, deactivation should be
+    /// deferred until the appeal window closes. The `PolicyDeactivated` event
+    /// (emitted in `claim.rs`) is the authoritative signal for indexers; it
+    /// will carry a `reason_code = 1` identifying this variant.
+    ExcessiveRejections,
 }
 
 // ── Premium engine structs ────────────────────────────────────────────────────
@@ -117,15 +194,16 @@ pub struct MultiplierTable {
     pub version: u32,
 }
 
-#[contracttype]
+#[contractevent(topics = ["niffyinsure", "premium_table_updated"])]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PremiumTableUpdated {
     pub version: u32,
 }
 
-#[contracttype]
+#[contractevent(topics = ["niffyinsure", "claim_paid"])]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ClaimProcessed {
+    #[topic]
     pub claim_id: u64,
     pub recipient: Address,
     pub amount: i128,
@@ -148,9 +226,28 @@ pub struct Policy {
     /// SEP-41 asset contract used for this policy's premium payment and claim payout.
     /// Must be allowlisted at the time of policy initiation.
     pub asset: Address,
+    // Termination fields
     pub terminated_at_ledger: u32,
     pub termination_reason: TerminationReason,
     pub terminated_by_admin: bool,
+    /// Running count of rejected claims against this policy.
+    ///
+    /// Incremented by `claim::on_reject` every time a claim on this policy
+    /// reaches `ClaimStatus::Rejected` (whether via majority vote or deadline
+    /// finalization). Never decremented; exists purely for accumulation.
+    ///
+    /// When `strike_count >= STRIKE_DEACTIVATION_THRESHOLD`, the policy is
+    /// automatically deactivated (`is_active = false`) and the
+    /// `PolicyDeactivated` event is emitted. No admin action is required.
+    ///
+    /// RENEWAL GATE: Any future `renew_policy` implementation MUST check
+    /// `strike_count` before allowing renewal. A policy with strikes at or
+    /// near the threshold should be blocked or require admin review.
+    ///
+    /// DATA VISIBILITY: This field is stored on-chain and permanently
+    /// readable via `get_policy`. It carries only a count — no allegation
+    /// narratives, no claimant-identifying data.
+    pub strike_count: u32,
 }
 
 /// On-chain claim record.
@@ -169,12 +266,23 @@ pub struct Claim {
     pub details: String,
     pub image_urls: Vec<String>,
     pub status: ClaimStatus,
+    pub voting_deadline_ledger: u32,
     pub approve_votes: u32,
     pub reject_votes: u32,
     /// Ledger sequence at which this claim was filed (voting window anchor).
     pub filed_at: u32,
-    /// Ledger sequence at which payout was executed; None until Paid.
-    pub paid_at: Option<u32>,
+    // ── Appeal fields ────────────────────────────────────────────────────────
+    /// Ledger by which `open_appeal` must be called (0 if never rejected).
+    /// Set to `rejected_at + APPEAL_OPEN_WINDOW_LEDGERS` when status → Rejected.
+    pub appeal_open_deadline_ledger: u32,
+    /// How many appeals have been opened for this claim (cap = MAX_APPEALS_PER_CLAIM).
+    pub appeals_count: u32,
+    /// Voting deadline for the current appeal round (0 if no appeal open).
+    pub appeal_deadline_ledger: u32,
+    /// Approve votes cast in the current appeal round.
+    pub appeal_approve_votes: u32,
+    /// Reject votes cast in the current appeal round.
+    pub appeal_reject_votes: u32,
 }
 
 #[contracttype]
@@ -221,7 +329,6 @@ pub struct PremiumQuote {
 ///   - Oracle key rotation mechanism
 ///   - Sybil resistance (how to prevent fake oracles)
 ///   - Collusion detection
-#[cfg(feature = "experimental")]
 #[contracttype]
 #[derive(Clone, PartialEq, Debug)]
 pub enum OracleSource {
@@ -244,7 +351,6 @@ pub enum OracleSource {
 ///   - How are oracles incentivized to report truthfully?
 ///   - What slash conditions exist for malicious reports?
 ///   - How is consensus achieved for ambiguous events (e.g., "storm damage")?
-#[cfg(feature = "experimental")]
 #[contracttype]
 #[derive(Clone, PartialEq, Debug)]
 pub enum TriggerEventType {
@@ -283,7 +389,7 @@ pub struct OracleTrigger {
     pub source: OracleSource,
     /// Event-specific payload (schema depends on event_type).
     /// Must be validated against event_type schema before use.
-    pub payload: Vec<u8>,
+    pub payload: Bytes,
     /// Unix timestamp when the oracle attested this event.
     pub timestamp: u64,
     /// Ledger sequence when this trigger was recorded.
@@ -297,7 +403,20 @@ pub struct OracleTrigger {
     ///
     /// DO NOT PARSE: This field may contain arbitrary data that could
     /// trigger parsing vulnerabilities if interpreted without validation.
-    pub signature: Vec<u8>,
+    pub signature: Bytes,
+}
+
+#[cfg(not(feature = "experimental"))]
+#[contracttype]
+#[derive(Clone)]
+pub struct OracleTrigger {
+    pub policy_id: u32,
+    pub event_type: TriggerEventType,
+    pub source: OracleSource,
+    pub payload: Bytes,
+    pub timestamp: u64,
+    pub trigger_ledger: u32,
+    pub signature: Bytes,
 }
 
 /// Status of an oracle trigger in the resolution pipeline.
@@ -314,6 +433,17 @@ pub enum TriggerStatus {
     /// Trigger executed (payout initiated).
     Executed,
     /// Trigger expired (TTL exceeded).
+    Expired,
+}
+
+#[cfg(not(feature = "experimental"))]
+#[contracttype]
+#[derive(Clone, PartialEq, Debug)]
+pub enum TriggerStatus {
+    Pending,
+    Validated,
+    Rejected,
+    Executed,
     Expired,
 }
 
@@ -341,5 +471,16 @@ pub struct ParametricClaim {
     /// Status of the parametric resolution.
     pub status: TriggerStatus,
     /// Block height when resolution occurred.
+    pub resolved_ledger: u32,
+}
+
+#[cfg(not(feature = "experimental"))]
+#[contracttype]
+#[derive(Clone)]
+pub struct ParametricClaim {
+    pub claim_id: u64,
+    pub trigger_id: u64,
+    pub amount: i128,
+    pub status: TriggerStatus,
     pub resolved_ledger: u32,
 }

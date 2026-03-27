@@ -5,11 +5,26 @@ mod storage;
 pub mod types;
 
 pub use errors::CalcError;
-use soroban_sdk::{contract, contractimpl, symbol_short, Address, Env};
-use types::{CalcInput, CalcResult, MultiplierTable, SCALE, MAX_SAFETY_DISCOUNT, MIN_MULTIPLIER, MAX_MULTIPLIER};
+use soroban_sdk::{contract, contractevent, contractimpl, Address, Env};
+use types::{
+    CalcInput, CalcResult, MultiplierTable, MAX_MULTIPLIER, MAX_SAFETY_DISCOUNT, MIN_MULTIPLIER,
+    SCALE,
+};
 
 #[contract]
 pub struct PremiumCalculator;
+
+#[contractevent(topics = ["premium_calculator", "config_updated"])]
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct ConfigUpdated {
+    pub version: u32,
+}
+
+#[contractevent(topics = ["premium_calculator", "pause_toggled"])]
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct PauseToggled {
+    pub paused: bool,
+}
 
 #[contractimpl]
 impl PremiumCalculator {
@@ -51,10 +66,10 @@ impl PremiumCalculator {
         }
         validate_table(&new_table)?;
         storage::set_table(&env, &new_table);
-        env.events().publish(
-            (symbol_short!("cfg"),),
-            new_table.version,
-        );
+        ConfigUpdated {
+            version: new_table.version,
+        }
+        .publish(&env);
         Ok(())
     }
 
@@ -63,10 +78,7 @@ impl PremiumCalculator {
         let admin = storage::get_admin(&env).ok_or(CalcError::NotInitialized)?;
         admin.require_auth();
         storage::set_paused(&env, paused);
-        env.events().publish(
-            (symbol_short!("pause"),),
-            paused,
-        );
+        PauseToggled { paused }.publish(&env);
         Ok(())
     }
 }
@@ -81,9 +93,18 @@ fn compute_premium(input: &CalcInput, table: &MultiplierTable) -> Result<i128, C
         return Err(CalcError::SafetyScoreOutOfRange);
     }
 
-    let r = table.region.get(input.region.clone()).ok_or(CalcError::MissingRegionMultiplier)?;
-    let a = table.age.get(input.age_band.clone()).ok_or(CalcError::MissingAgeMultiplier)?;
-    let c = table.coverage.get(input.coverage.clone()).ok_or(CalcError::MissingCoverageMultiplier)?;
+    let r = table
+        .region
+        .get(input.region.clone())
+        .ok_or(CalcError::MissingRegionMultiplier)?;
+    let a = table
+        .age
+        .get(input.age_band.clone())
+        .ok_or(CalcError::MissingAgeMultiplier)?;
+    let c = table
+        .coverage
+        .get(input.coverage.clone())
+        .ok_or(CalcError::MissingCoverageMultiplier)?;
 
     let earned = mul_ratio(input.safety_score as i128, table.safety_discount, 100)?;
     let safety = checked_sub(SCALE, earned)?;
@@ -96,18 +117,30 @@ fn compute_premium(input: &CalcInput, table: &MultiplierTable) -> Result<i128, C
 }
 
 fn validate_table(t: &MultiplierTable) -> Result<(), CalcError> {
-    if t.region.len() != 3u32 { return Err(CalcError::MissingRegionMultiplier); }
-    if t.age.len() != 3u32 { return Err(CalcError::MissingAgeMultiplier); }
-    if t.coverage.len() != 3u32 { return Err(CalcError::MissingCoverageMultiplier); }
+    if t.region.len() != 3u32 {
+        return Err(CalcError::MissingRegionMultiplier);
+    }
+    if t.age.len() != 3u32 {
+        return Err(CalcError::MissingAgeMultiplier);
+    }
+    if t.coverage.len() != 3u32 {
+        return Err(CalcError::MissingCoverageMultiplier);
+    }
 
     for (_, v) in t.region.iter() {
-        if v < MIN_MULTIPLIER || v > MAX_MULTIPLIER { return Err(CalcError::RegionMultiplierOutOfBounds); }
+        if !(MIN_MULTIPLIER..=MAX_MULTIPLIER).contains(&v) {
+            return Err(CalcError::RegionMultiplierOutOfBounds);
+        }
     }
     for (_, v) in t.age.iter() {
-        if v < MIN_MULTIPLIER || v > MAX_MULTIPLIER { return Err(CalcError::AgeMultiplierOutOfBounds); }
+        if !(MIN_MULTIPLIER..=MAX_MULTIPLIER).contains(&v) {
+            return Err(CalcError::AgeMultiplierOutOfBounds);
+        }
     }
     for (_, v) in t.coverage.iter() {
-        if v < MIN_MULTIPLIER || v > MAX_MULTIPLIER { return Err(CalcError::CoverageMultiplierOutOfBounds); }
+        if !(MIN_MULTIPLIER..=MAX_MULTIPLIER).contains(&v) {
+            return Err(CalcError::CoverageMultiplierOutOfBounds);
+        }
     }
     if t.safety_discount < 0 || t.safety_discount > MAX_SAFETY_DISCOUNT {
         return Err(CalcError::SafetyDiscountOutOfBounds);
@@ -116,9 +149,16 @@ fn validate_table(t: &MultiplierTable) -> Result<(), CalcError> {
 }
 
 fn mul_ratio(amount: i128, num: i128, den: i128) -> Result<i128, CalcError> {
-    if amount < 0 || num < 0 || den < 0 { return Err(CalcError::NegativePremiumNotSupported); }
-    if den == 0 { return Err(CalcError::DivideByZero); }
-    amount.checked_mul(num).ok_or(CalcError::Overflow).map(|p| p / den)
+    if amount < 0 || num < 0 || den < 0 {
+        return Err(CalcError::NegativePremiumNotSupported);
+    }
+    if den == 0 {
+        return Err(CalcError::DivideByZero);
+    }
+    amount
+        .checked_mul(num)
+        .ok_or(CalcError::Overflow)
+        .map(|p| p / den)
 }
 
 fn checked_sub(a: i128, b: i128) -> Result<i128, CalcError> {

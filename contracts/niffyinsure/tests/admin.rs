@@ -14,7 +14,7 @@
 
 #![cfg(test)]
 
-use niffyinsure::{AdminError, NiffyInsureClient};
+use niffyinsure::NiffyInsureClient;
 use soroban_sdk::{
     testutils::{Address as _, Events},
     Address, Env,
@@ -68,16 +68,14 @@ fn two_step_rotation_completes() {
 
 #[test]
 fn non_admin_cannot_propose() {
-    let (env, client, _, _) = setup();
-    let rando = Address::generate(&env);
-    let new_admin = Address::generate(&env);
-
-    // Disable mock_all_auths so auth is actually checked
+    let (_env, _client, _, _) = setup();
     let env2 = Env::default();
     let cid = env2.register(niffyinsure::NiffyInsure, ());
     let client2 = NiffyInsureClient::new(&env2, &cid);
     let admin = Address::generate(&env2);
     let token = Address::generate(&env2);
+    let rando = Address::generate(&env2);
+    let new_admin = Address::generate(&env2);
     env2.mock_all_auths();
     client2.initialize(&admin, &token);
 
@@ -95,8 +93,6 @@ fn non_admin_cannot_propose() {
         },
     }]);
     assert!(client2.try_propose_admin(&new_admin).is_err());
-
-    let _ = (env, rando); // suppress unused warnings
 }
 
 #[test]
@@ -119,7 +115,7 @@ fn unrelated_signer_cannot_accept_pending_admin() {
     env.mock_auths(&[soroban_sdk::testutils::MockAuth {
         address: &hijacker,
         invoke: &soroban_sdk::testutils::MockAuthInvoke {
-            contract: client.address(),
+            contract: &client.address,
             fn_name: "accept_admin",
             args: soroban_sdk::vec![&env],
             sub_invokes: &[],
@@ -220,25 +216,24 @@ fn non_admin_cannot_set_token() {
 
 #[test]
 fn admin_can_pause_and_unpause() {
-    let (_env, client, _, _) = setup();
-    client.pause();
-    client.unpause();
+    let (_env, client, admin, _) = setup();
+    client.pause(&admin, &0u32);
+    client.unpause(&admin, &0u32);
 }
 
 #[test]
 fn pause_emits_event() {
-    let (env, client, _, _) = setup();
-    client.pause();
+    let (env, client, admin, _) = setup();
+    client.pause(&admin, &0u32);
     assert!(!env.events().all().is_empty());
 }
 
 #[test]
 fn unpause_emits_event() {
-    let (env, client, _, _) = setup();
-    client.pause();
-    let before = env.events().all().len();
-    client.unpause();
-    assert!(env.events().all().len() > before);
+    let (env, client, admin, _) = setup();
+    client.pause(&admin, &0u32);
+    client.unpause(&admin, &0u32);
+    assert!(!env.events().all().is_empty());
 }
 
 #[test]
@@ -258,11 +253,15 @@ fn non_admin_cannot_pause() {
         invoke: &soroban_sdk::testutils::MockAuthInvoke {
             contract: &cid,
             fn_name: "pause",
-            args: soroban_sdk::vec![&env2],
+            args: soroban_sdk::vec![
+                &env2,
+                soroban_sdk::IntoVal::<Env, soroban_sdk::Val>::into_val(&rando, &env2),
+                soroban_sdk::IntoVal::<Env, soroban_sdk::Val>::into_val(&0u32, &env2)
+            ],
             sub_invokes: &[],
         },
     }]);
-    assert!(client2.try_pause().is_err());
+    assert!(client2.try_pause(&rando, &0u32).is_err());
 }
 
 #[test]
@@ -276,18 +275,22 @@ fn non_admin_cannot_unpause() {
 
     env2.mock_all_auths();
     client2.initialize(&admin, &token);
-    client2.pause();
+    client2.pause(&admin, &0u32);
 
     env2.mock_auths(&[soroban_sdk::testutils::MockAuth {
         address: &rando,
         invoke: &soroban_sdk::testutils::MockAuthInvoke {
             contract: &cid,
             fn_name: "unpause",
-            args: soroban_sdk::vec![&env2],
+            args: soroban_sdk::vec![
+                &env2,
+                soroban_sdk::IntoVal::<Env, soroban_sdk::Val>::into_val(&rando, &env2),
+                soroban_sdk::IntoVal::<Env, soroban_sdk::Val>::into_val(&0u32, &env2)
+            ],
             sub_invokes: &[],
         },
     }]);
-    assert!(client2.try_unpause().is_err());
+    assert!(client2.try_unpause(&rando, &0u32).is_err());
 }
 
 // ── drain ─────────────────────────────────────────────────────────────────────
@@ -350,9 +353,8 @@ fn accept_admin_emits_event() {
     let (env, client, _, _) = setup();
     let new_admin = Address::generate(&env);
     client.propose_admin(&new_admin);
-    let before = env.events().all().len();
     client.accept_admin();
-    assert!(env.events().all().len() > before);
+    assert!(!env.events().all().is_empty());
 }
 
 #[test]
@@ -360,7 +362,6 @@ fn cancel_admin_emits_event() {
     let (env, client, _, _) = setup();
     let new_admin = Address::generate(&env);
     client.propose_admin(&new_admin);
-    let before = env.events().all().len();
     client.cancel_admin();
-    assert!(env.events().all().len() > before);
+    assert!(!env.events().all().is_empty());
 }

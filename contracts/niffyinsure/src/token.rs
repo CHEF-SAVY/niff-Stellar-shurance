@@ -48,3 +48,17 @@ pub fn check_balance(env: &Env, asset: &Address, amount: i128) -> bool {
     let client = token::TokenClient::new(env, asset);
     client.balance(&env.current_contract_address()) >= amount
 }
+
+/// Get the current balance of `asset` held by the contract.
+pub fn get_balance(env: &Env, asset: &Address) -> i128 {
+    let client = token::TokenClient::new(env, asset);
+    client.balance(&env.current_contract_address())
+}
+
+/// Emergency sweep: transfer `amount` of `asset` from contract to `recipient`.
+/// Used only by admin sweep_token() function with strict validation.
+/// Defence-in-depth: caller must have already validated asset allowlist.
+pub fn sweep_asset(env: &Env, asset: &Address, recipient: &Address, amount: i128) {
+    let client = token::TokenClient::new(env, asset);
+    client.transfer(&env.current_contract_address(), recipient, &amount);
+}

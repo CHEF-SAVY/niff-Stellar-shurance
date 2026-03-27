@@ -77,6 +77,7 @@ export class IdempotencyService {
     contentHash: string,
     fileSize: number,
   ): Promise<IdempotencyCheckResult> {
+    void fileSize;
     // Generate or use provided key
     const key = idempotencyKey 
       ? `${this.keyPrefix}explicit:${idempotencyKey}`

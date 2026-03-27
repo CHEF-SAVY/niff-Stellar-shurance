@@ -10,8 +10,9 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
   handleRequest<TUser = { walletAddress: string }>(
     err: Error | null,
     user: TUser | false,
-    info: Error | undefined,
+    _info: Error | undefined,
   ): TUser {
+    void _info;
     if (err || !user) {
       throw err || new UnauthorizedException('Invalid or missing authentication token');
     }

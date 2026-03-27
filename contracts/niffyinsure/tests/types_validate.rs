@@ -20,9 +20,11 @@ fn dummy_policy(env: &Env, start: u32, end: u32, coverage: i128, active: bool) -
         is_active: active,
         start_ledger: start,
         end_ledger: end,
+        asset: Address::generate(env),
         terminated_at_ledger: 0,
         termination_reason: TerminationReason::None,
         terminated_by_admin: false,
+        strike_count: 0,
     }
 }
 
@@ -32,13 +34,18 @@ fn dummy_claim(env: &Env, amount: i128, status: ClaimStatus) -> Claim {
         policy_id: 1,
         claimant: Address::generate(env),
         amount,
-        asset: Address::generate(env),
         details: String::from_str(env, "fire damage"),
         image_urls: vec![env],
         status,
+        voting_deadline_ledger: 1_000,
         approve_votes: 0,
         reject_votes: 0,
-        paid_at: None,
+        filed_at: 100,
+        appeal_open_deadline_ledger: 0,
+        appeals_count: 0,
+        appeal_deadline_ledger: 0,
+        appeal_approve_votes: 0,
+        appeal_reject_votes: 0,
     }
 }
 
@@ -200,7 +207,7 @@ fn image_url_over_max_len_rejected() {
 #[test]
 fn processing_claim_is_open() {
     let env = Env::default();
-    let c = dummy_claim(&env, 1_000_000, ClaimStatus::Pending);
+    let c = dummy_claim(&env, 1_000_000, ClaimStatus::Processing);
     assert_eq!(check_claim_open(&c), Ok(()));
 }
 
@@ -235,7 +242,8 @@ fn vote_option_variants_distinct() {
 #[test]
 fn claim_status_terminal_flags() {
     assert!(!ClaimStatus::Pending.is_terminal());
-    assert!(!ClaimStatus::Approved.is_terminal());
+    assert!(!ClaimStatus::Processing.is_terminal());
+    assert!(ClaimStatus::Approved.is_terminal());
     assert!(ClaimStatus::Paid.is_terminal());
     assert!(ClaimStatus::Rejected.is_terminal());
 }

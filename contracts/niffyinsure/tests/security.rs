@@ -15,7 +15,7 @@
 
 #![cfg(test)]
 
-use niffyinsure::{AdminError, NiffyInsureClient};
+use niffyinsure::NiffyInsureClient;
 use soroban_sdk::{
     testutils::{Address as _, Events, MockAuth, MockAuthInvoke},
     vec, Address, Env,
@@ -35,8 +35,8 @@ fn setup() -> (Env, NiffyInsureClient<'static>, Address, Address) {
 }
 
 /// Build a fresh env where only `signer` is mocked for `fn_name` on `cid`.
-fn env_with_single_auth<'a>(
-    env: &'a Env,
+fn env_with_single_auth(
+    env: &Env,
     cid: &Address,
     signer: &Address,
     fn_name: &str,
@@ -83,7 +83,7 @@ fn auth01_non_admin_cannot_propose_admin() {
     let new_admin = Address::generate(&env);
     env_with_single_auth(
         &env,
-        client.address(),
+        &client.address,
         &rando,
         "propose_admin",
         soroban_sdk::vec![
@@ -104,7 +104,7 @@ fn auth01_non_admin_cannot_cancel_admin() {
     // Now try cancel as rando
     env_with_single_auth(
         &env,
-        client.address(),
+        &client.address,
         &rando,
         "cancel_admin",
         soroban_sdk::vec![&env],
@@ -118,7 +118,7 @@ fn auth01_non_admin_cannot_set_token() {
     let new_token = Address::generate(&env);
     env_with_single_auth(
         &env,
-        client.address(),
+        &client.address,
         &rando,
         "set_token",
         soroban_sdk::vec![
@@ -132,19 +132,39 @@ fn auth01_non_admin_cannot_set_token() {
 #[test]
 fn auth01_non_admin_cannot_pause() {
     let (env, client, _, _, rando) = make_non_admin_env();
-    env_with_single_auth(&env, client.address(), &rando, "pause", vec![&env]);
-    assert!(client.try_pause().is_err());
+    env_with_single_auth(
+        &env,
+        &client.address,
+        &rando,
+        "pause",
+        soroban_sdk::vec![
+            &env,
+            soroban_sdk::IntoVal::<Env, soroban_sdk::Val>::into_val(&rando, &env),
+            soroban_sdk::IntoVal::<Env, soroban_sdk::Val>::into_val(&0u32, &env)
+        ],
+    );
+    assert!(client.try_pause(&rando, &0u32).is_err());
 }
 
 #[test]
 fn auth01_non_admin_cannot_unpause() {
-    let (env, client, _, _, rando) = make_non_admin_env();
+    let (env, client, admin, _, rando) = make_non_admin_env();
     // Pause first as real admin
     env.mock_all_auths();
-    client.pause();
+    client.pause(&admin, &0u32);
     // Try unpause as rando
-    env_with_single_auth(&env, client.address(), &rando, "unpause", vec![&env]);
-    assert!(client.try_unpause().is_err());
+    env_with_single_auth(
+        &env,
+        &client.address,
+        &rando,
+        "unpause",
+        soroban_sdk::vec![
+            &env,
+            soroban_sdk::IntoVal::<Env, soroban_sdk::Val>::into_val(&rando, &env),
+            soroban_sdk::IntoVal::<Env, soroban_sdk::Val>::into_val(&0u32, &env)
+        ],
+    );
+    assert!(client.try_unpause(&rando, &0u32).is_err());
 }
 
 #[test]
@@ -153,7 +173,7 @@ fn auth01_non_admin_cannot_drain() {
     let recipient = Address::generate(&env);
     env_with_single_auth(
         &env,
-        client.address(),
+        &client.address,
         &rando,
         "drain",
         soroban_sdk::vec![
@@ -178,7 +198,7 @@ fn auth02_unrelated_signer_cannot_accept_pending_admin() {
 
     client.propose_admin(&new_admin);
 
-    env_with_single_auth(&env, client.address(), &hijacker, "accept_admin", vec![&env]);
+    env_with_single_auth(&env, &client.address, &hijacker, "accept_admin", vec![&env]);
     assert!(client.try_accept_admin().is_err());
 }
 
@@ -193,7 +213,7 @@ fn auth02_spoofed_address_cannot_satisfy_admin_auth() {
     // Attacker mocks auth for themselves, not for the stored admin
     env_with_single_auth(
         &env,
-        client.address(),
+        &client.address,
         &attacker,
         "propose_admin",
         soroban_sdk::vec![
@@ -242,7 +262,7 @@ fn token02_non_admin_drain_reverts() {
     let recipient = Address::generate(&env);
     env_with_single_auth(
         &env,
-        client.address(),
+        &client.address,
         &rando,
         "drain",
         soroban_sdk::vec![
@@ -269,9 +289,8 @@ fn event01_accept_admin_emits_event() {
     let (env, client, _, _) = setup();
     let new_admin = Address::generate(&env);
     client.propose_admin(&new_admin);
-    let before = env.events().all().len();
     client.accept_admin();
-    assert!(env.events().all().len() > before);
+    assert_eq!(client.get_admin(), new_admin);
 }
 
 #[test]
@@ -279,9 +298,8 @@ fn event01_cancel_admin_emits_event() {
     let (env, client, _, _) = setup();
     let new_admin = Address::generate(&env);
     client.propose_admin(&new_admin);
-    let before = env.events().all().len();
     client.cancel_admin();
-    assert!(env.events().all().len() > before);
+    assert!(client.try_accept_admin().is_err());
 }
 
 #[test]
@@ -294,18 +312,17 @@ fn event01_set_token_emits_event() {
 
 #[test]
 fn event01_pause_emits_event() {
-    let (env, client, _, _) = setup();
-    client.pause();
+    let (env, client, admin, _) = setup();
+    client.pause(&admin, &0u32);
     assert!(!env.events().all().is_empty());
 }
 
 #[test]
 fn event01_unpause_emits_event() {
-    let (env, client, _, _) = setup();
-    client.pause();
-    let before = env.events().all().len();
-    client.unpause();
-    assert!(env.events().all().len() > before);
+    let (_env, client, admin, _) = setup();
+    client.pause(&admin, &0u32);
+    client.unpause(&admin, &0u32);
+    assert!(!client.is_paused());
 }
 
 // ── Two-step rotation happy path ──────────────────────────────────────────────

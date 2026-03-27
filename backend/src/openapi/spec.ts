@@ -15,8 +15,40 @@ export const openapiSpec = {
       "Never use floating-point arithmetic on amount fields.",
   },
   servers: [{ url: "/", description: "Current server" }],
-  tags: [{ name: "Policies", description: "Policy lifecycle and listing" }],
+  tags: [
+    { name: "Policies", description: "Policy lifecycle and listing" },
+    { name: "Claims", description: "Claim filing, listing, and voting" },
+  ],
   paths: {
+    "/claims": {
+      get: {
+        summary: "List claims",
+        operationId: "listClaims",
+        tags: ["Claims"],
+        parameters: [
+          { $ref: "#/components/parameters/after" },
+          { $ref: "#/components/parameters/limit" },
+          {
+            name: "status",
+            in: "query",
+            description: "Filter by claim status.",
+            schema: { type: "string", enum: ["pending", "approved", "rejected", "paid"] },
+          },
+        ],
+        responses: {
+          "200": {
+            description: "Paginated claim list",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/ClaimsListDto" },
+              },
+            },
+          },
+          "400": { $ref: "#/components/responses/BadRequest" },
+          "429": { $ref: "#/components/responses/RateLimited" },
+        },
+      },
+    },
     "/policies": {
       get: {
         summary: "List policies",
@@ -35,20 +67,8 @@ export const openapiSpec = {
             description: "Filter by policyholder Stellar address (G... format).",
             schema: { type: "string", example: "GABC1111111111111111111111111111111111111111111111111111" },
           },
-          {
-            name: "after",
-            in: "query",
-            description:
-              "Opaque cursor from a previous response's next_cursor field. " +
-              "Returns 400 if the cursor is malformed.",
-            schema: { type: "string", example: "MjA" },
-          },
-          {
-            name: "limit",
-            in: "query",
-            description: "Items per page. Clamped to [1, 100]. Default 20.",
-            schema: { type: "integer", minimum: 1, maximum: 100, default: 20 },
-          },
+          { $ref: "#/components/parameters/after" },
+          { $ref: "#/components/parameters/limit" },
         ],
         responses: {
           "200": {
@@ -89,8 +109,7 @@ export const openapiSpec = {
                       _link: "/policies/GABC.../1",
                     },
                   ],
-                  next_cursor: null,
-                  total: 1,
+                  pagination: { next_cursor: null, total: 1 },
                 },
               },
             },
@@ -138,7 +157,126 @@ export const openapiSpec = {
     },
   },
   components: {
+    parameters: {
+      after: {
+        name: "after",
+        in: "query",
+        required: false,
+        description:
+          "Opaque cursor from a previous response's `pagination.next_cursor`. " +
+          "Omit on the first request. Returns HTTP 400 if the cursor is malformed or tampered. " +
+          "Cursors encode `(createdAt, id)` and results are ordered newest-first. " +
+          "Rows inserted after cursor creation will not appear on subsequent pages — " +
+          "clients building infinite-scroll UIs should deduplicate by `id`. " +
+          "Cursors are point-in-time: time drift between cursor creation and fetch " +
+          "does not affect correctness because comparisons are against DB-stored timestamps.",
+        schema: {
+          type: "string",
+          example: "eyJjcmVhdGVkQXQiOiIyMDI0LTAxLTAxVDAwOjAwOjAwLjAwMFoiLCJpZCI6NDJ9",
+        },
+      },
+      limit: {
+        name: "limit",
+        in: "query",
+        required: false,
+        description:
+          "Maximum items per page. Values above 100 are silently clamped to 100. " +
+          "Values below 1 are clamped to 1. Default: 20.",
+        schema: { type: "integer", minimum: 1, maximum: 100, default: 20 },
+      },
+    },
     schemas: {
+      CursorPageDto: {
+        type: "object",
+        required: ["next_cursor", "total"],
+        properties: {
+          next_cursor: {
+            type: ["string", "null"],
+            description:
+              "Opaque cursor for the next page. Null when no more pages exist. " +
+              "Pass as the `after` query parameter on the next request.",
+            example: "eyJjcmVhdGVkQXQiOiIyMDI0LTAxLTAxVDAwOjAwOjAwLjAwMFoiLCJpZCI6NDJ9",
+          },
+          total: {
+            type: "integer",
+            description:
+              "Total rows matching the filter before pagination. " +
+              "Eventually consistent — may differ by ±1 under concurrent inserts.",
+            example: 42,
+          },
+        },
+      },
+      ClaimsListDto: {
+        type: "object",
+        required: ["data", "pagination"],
+        properties: {
+          data: {
+            type: "array",
+            items: { $ref: "#/components/schemas/ClaimDetailDto" },
+          },
+          pagination: { $ref: "#/components/schemas/CursorPageDto" },
+        },
+      },
+      ClaimDetailDto: {
+        type: "object",
+        required: ["metadata", "votes", "quorum", "deadline", "evidence", "consistency"],
+        properties: {
+          metadata: {
+            type: "object",
+            properties: {
+              id: { type: "integer", example: 1 },
+              policyId: { type: "string", example: "GABC...:1" },
+              creatorAddress: { type: "string", example: "GABC..." },
+              status: { type: "string", enum: ["pending", "approved", "paid", "rejected"] },
+              amount: { type: "string", description: "Claim amount in stroops.", example: "50000000" },
+              createdAt: { type: "string", format: "date-time" },
+              updatedAt: { type: "string", format: "date-time" },
+            },
+          },
+          votes: {
+            type: "object",
+            properties: {
+              yesVotes: { type: "integer", example: 3 },
+              noVotes: { type: "integer", example: 1 },
+              totalVotes: { type: "integer", example: 4 },
+            },
+          },
+          quorum: {
+            type: "object",
+            properties: {
+              required: { type: "integer", example: 3 },
+              current: { type: "integer", example: 4 },
+              percentage: { type: "integer", example: 100 },
+              reached: { type: "boolean", example: true },
+            },
+          },
+          deadline: {
+            type: "object",
+            properties: {
+              votingDeadlineLedger: { type: "integer", example: 1120960 },
+              votingDeadlineTime: { type: "string", format: "date-time" },
+              isOpen: { type: "boolean", example: true },
+              remainingSeconds: { type: "integer", nullable: true, example: 3600 },
+            },
+          },
+          evidence: {
+            type: "object",
+            properties: {
+              gatewayUrl: { type: "string", example: "https://ipfs.io/ipfs/Qm..." },
+              hash: { type: "string", example: "QmXyz..." },
+            },
+          },
+          consistency: {
+            type: "object",
+            properties: {
+              isFinalized: { type: "boolean", example: false },
+              indexerLag: { type: "integer", example: 2 },
+              lastIndexedLedger: { type: "integer", example: 1000000 },
+              isStale: { type: "boolean", example: false },
+            },
+          },
+        },
+      },
       CoverageSummaryDto: {
         type: "object",
         required: ["coverage_amount", "premium_amount", "currency", "decimals"],
@@ -222,19 +360,10 @@ export const openapiSpec = {
       },
       PolicyListDto: {
         type: "object",
-        required: ["data", "next_cursor", "total"],
+        required: ["data", "pagination"],
         properties: {
           data: { type: "array", items: { $ref: "#/components/schemas/PolicyDto" } },
-          next_cursor: {
-            type: ["string", "null"],
-            description: "Opaque cursor for the next page. Null when no more pages.",
-            example: "MjA",
-          },
-          total: {
-            type: "integer",
-            description: "Total matching policies before pagination.",
-            example: 42,
-          },
+          pagination: { $ref: "#/components/schemas/CursorPageDto" },
         },
       },
       ApiError: {

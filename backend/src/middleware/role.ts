@@ -1,5 +1,8 @@
 import { Response, NextFunction, Request } from 'express';
 import { StaffRole, ROLE_PERMISSIONS, AuthenticatedRequest } from '../types';
+import config from '../config';
+
+const shouldLogAuthFailures = config.logging.logAuthFailures && config.env !== 'test';
 
 export type RequiredRoles = StaffRole | StaffRole[];
 export type Permission = string;
@@ -26,7 +29,9 @@ export function requireRole(...requiredRoles: StaffRole[]) {
 
     if (!requiredRoles.includes(userRole)) {
       // Log authorization failure (no sensitive data)
-      console.error(`[AUTH] Role check failed: user ${authReq.user.email} with role ${userRole} attempted to access ${req.method} ${req.path} requiring ${requiredRoles.join(' or ')}`);
+      if (shouldLogAuthFailures) {
+        console.error(`[AUTH] Role check failed: user ${authReq.user.email} with role ${userRole} attempted to access ${req.method} ${req.path} requiring ${requiredRoles.join(' or ')}`);
+      }
 
       res.status(403).json({
         error: 'Forbidden',
@@ -63,7 +68,9 @@ export function requirePermission(...requiredPermissions: Permission[]) {
 
     if (!hasPermission) {
       // Log authorization failure (no sensitive data)
-      console.error(`[AUTH] Permission check failed: user ${authReq.user.email} with role ${authReq.user.role} lacks required permissions: ${requiredPermissions.join(', ')}`);
+      if (shouldLogAuthFailures) {
+        console.error(`[AUTH] Permission check failed: user ${authReq.user.email} with role ${authReq.user.role} lacks required permissions: ${requiredPermissions.join(', ')}`);
+      }
 
       res.status(403).json({
         error: 'Forbidden',

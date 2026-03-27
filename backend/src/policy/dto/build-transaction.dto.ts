@@ -33,15 +33,15 @@ export class BuildTransactionDto {
   @Matches(/^G[A-Z2-7]{55}$/, {
     message: 'holder must be a valid Stellar public key (G...)',
   })
-  holder: string;
+  holder!: string;
 
   @ApiProperty({ enum: PolicyTypeEnum })
   @IsEnum(PolicyTypeEnum)
-  policy_type: PolicyTypeEnum;
+  policy_type!: PolicyTypeEnum;
 
   @ApiProperty({ enum: RegionTierEnum })
   @IsEnum(RegionTierEnum)
-  region: RegionTierEnum;
+  region!: RegionTierEnum;
 
   @ApiProperty({
     description:
@@ -50,19 +50,26 @@ export class BuildTransactionDto {
   })
   @IsString()
   @Validate(PositiveIntStringConstraint)
-  coverage: string;
+  coverage!: string;
 
   @ApiProperty({ minimum: 1, maximum: 120 })
   @IsInt()
   @Min(1)
   @Max(120)
-  age: number;
+  age!: number;
 
   @ApiProperty({ minimum: 1, maximum: 10 })
   @IsInt()
   @Min(1)
   @Max(10)
-  risk_score: number;
+  risk_score!: number;
+
+  @ApiPropertyOptional({
+    description: 'Optional Stellar asset contract address to use for the policy.',
+  })
+  @IsOptional()
+  @IsString()
+  asset?: string;
 
   @ApiPropertyOptional({
     description: 'Policy start ledger. Defaults to current ledger.',

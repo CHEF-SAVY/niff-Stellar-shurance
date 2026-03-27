@@ -90,6 +90,15 @@ export class FileValidationService {
   /** Whether to strip EXIF metadata */
   private readonly stripExif: boolean;
 
+  private static removeControlCharacters(value: string): string {
+    return Array.from(value)
+      .filter((character) => {
+        const charCode = character.charCodeAt(0);
+        return charCode >= 0x20 && charCode !== 0x7f;
+      })
+      .join('');
+  }
+
   constructor(private readonly configService: ConfigService) {
     this.maxFileSize = this.configService.get<number>('IPFS_MAX_FILE_SIZE', 50 * 1024 * 1024);
     this.minFileSize = this.configService.get<number>('IPFS_MIN_FILE_SIZE', 1);
@@ -187,7 +196,7 @@ export class FileValidationService {
     }
 
     // Get the base name (remove path components)
-    let name = filename.split(/[/\\]/).pop() || 'unnamed';
+    const name = filename.split(/[/\\]/).pop() || 'unnamed';
     
     // Get extension
     const extension = this.getFileExtension(name);
@@ -196,7 +205,7 @@ export class FileValidationService {
     // Remove any directory traversal attempts
     baseName = baseName.replace(/\.\./g, '');
     baseName = baseName.replace(/[<>:"|?*]/g, '');
-    baseName = baseName.replace(/[\x00-\x1f\x7f]/g, ''); // Remove control characters
+    baseName = FileValidationService.removeControlCharacters(baseName);
 
     // Limit length (leave room for extension and hash)
     if (baseName.length > 100) {

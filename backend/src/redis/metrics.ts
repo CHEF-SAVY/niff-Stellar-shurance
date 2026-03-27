@@ -27,6 +27,24 @@ export interface QueueMetrics {
   depth: number; // waiting + active — the "backlog" number to alert on
 }
 
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error("timeout")), ms);
+    timer.unref();
+
+    promise.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (error: unknown) => {
+        clearTimeout(timer);
+        reject(error);
+      }
+    );
+  });
+}
+
 /**
  * Collect Redis memory stats and per-queue depths.
  * Returns partial data if Redis is unavailable (connected: false).
@@ -38,12 +56,7 @@ export async function collectRedisMetrics(): Promise<RedisMetrics> {
   let memory_used_bytes: number | null = null;
 
   try {
-    const info = await Promise.race([
-      client.info("memory"),
-      new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error("timeout")), 2_000)
-      ),
-    ]);
+    const info = await withTimeout(client.info("memory"), 2_000);
     connected = true;
     const match = info.match(/used_memory:(\d+)/);
     if (match) memory_used_bytes = parseInt(match[1], 10);
