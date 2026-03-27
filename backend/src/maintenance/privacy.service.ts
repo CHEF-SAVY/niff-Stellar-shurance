@@ -4,12 +4,6 @@ import { AuditService } from '../admin/audit.service';
 
 export type PrivacyRequestType = 'ANONYMIZE' | 'DELETE';
 
-const ANON = {
-  email: '[redacted]',
-  fullName: '[redacted]',
-  phone: '[redacted]',
-} as const;
-
 @Injectable()
 export class PrivacyService {
   private readonly logger = new Logger(PrivacyService.name);

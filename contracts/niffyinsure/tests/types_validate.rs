@@ -41,6 +41,11 @@ fn dummy_claim(env: &Env, amount: i128, status: ClaimStatus) -> Claim {
         approve_votes: 0,
         reject_votes: 0,
         filed_at: 100,
+        appeal_open_deadline_ledger: 0,
+        appeals_count: 0,
+        appeal_deadline_ledger: 0,
+        appeal_approve_votes: 0,
+        appeal_reject_votes: 0,
     }
 }
 

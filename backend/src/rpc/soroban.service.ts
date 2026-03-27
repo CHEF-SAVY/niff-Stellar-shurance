@@ -402,7 +402,7 @@ export class SorobanService {
    */
   async submitTransaction(transactionXdr: string): Promise<SorobanRpc.Api.SendTransactionResponse> {
     const server = this.makeServer();
-    const tx = TransactionBuilder.fromEnvelope(transactionXdr, this.networkPassphrase);
+    const tx = TransactionBuilder.fromXDR(transactionXdr, this.networkPassphrase);
     
     try {
       const response = await server.sendTransaction(tx);
@@ -410,7 +410,7 @@ export class SorobanService {
         throw new BadRequestException({
           code: 'TRANSACTION_REJECTED',
           message: 'The transaction was rejected by the network.',
-          details: response.errorResultXdr,
+          details: response.errorResult,
         });
       }
       return response;

@@ -15,7 +15,7 @@ export function AmountStep({ amount, onChange, maxCoverage }: AmountStepProps) {
         <NumericInput
           id="amount"
           value={amount}
-          onValueChange={onChange}
+          onChange={(e) => onChange(e.target.value)}
           placeholder="Enter claim amount (e.g. 1000000000 for 100 XLM)"
           min="1"
           max={maxCoverage}

@@ -9,8 +9,7 @@ const TallyUpdateSchema = z.object({
   claimId: z.string(),
   approveVotes: z.number().int().nonnegative(),
   rejectVotes: z.number().int().nonnegative(),
-  quorumThreshold: z.number().int().positive(),
-  deadlineTimestamp: z.string(),
+  status: z.enum(["open", "closed", "pending"]),
 })
 
 function parseTallyUpdate(raw: unknown): TallyUpdate | null {

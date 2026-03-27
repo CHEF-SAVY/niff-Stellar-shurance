@@ -1,9 +1,9 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { headers } from "next/headers";
 import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
 import { inter, ibmPlexMono } from "@/lib/fonts";
-import { OfflineBanner } from "@/components/ui/offline-banner";
+import { ThemeProvider } from "@/components/theme-provider";
 
 export const viewport: Viewport = {
   width: "device-width",

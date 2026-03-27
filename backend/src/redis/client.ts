@@ -80,7 +80,9 @@ export function getRedisClient(): Redis {
       ? () => null
       : (times: number) => Math.min(times * 200, 10_000),
     lazyConnect: true,
-    enableOfflineQueue: false, // surface errors immediately rather than queuing
+    // enableOfflineQueue defaults to true: commands issued before the lazy
+    // connection is established are queued rather than rejected immediately.
+    // Without this, the first cacheSet/cacheGet pair silently fails.
   });
 
   _client.on("error", (err: Error) => {
@@ -114,14 +116,15 @@ export function getRedisClient(): Redis {
  */
 export function getBullMQConnection(): Redis {
   const cfg = buildRedisConfig();
+  // Note: BullMQ explicitly rejects ioredis `keyPrefix` — do not pass it here.
+  // Use BullMQ's own `prefix` option on Queue/Worker constructors if needed.
   return new Redis({
     host: cfg.host,
     port: cfg.port,
     password: cfg.password,
     tls: cfg.tls ? {} : undefined,
     db: cfg.db,
-    keyPrefix: cfg.keyPrefix,
-    maxRetriesPerRequest: null,
+    maxRetriesPerRequest: null, // required by BullMQ for blocking commands
     retryStrategy: (times: number) => Math.min(times * 200, 10_000),
     enableOfflineQueue: false,
   });

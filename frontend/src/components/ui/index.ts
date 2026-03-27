@@ -37,6 +37,7 @@ export {
 } from './table'
 export { DataTable, type Column } from './data-table'
 export { Skeleton } from './skeleton'
+export { Progress } from './progress'
 export {
   Card,
   CardHeader,

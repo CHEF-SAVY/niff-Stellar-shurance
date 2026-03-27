@@ -103,8 +103,8 @@ describe("Feature: cors-helmet-security-headers, Property 2", () => {
           // Should echo the exact origin string (not true, not false)
           return (
             calledWith !== null &&
-            (calledWith as any).err === null &&
-            (calledWith as any).allow === origin
+            (calledWith as { err: unknown; allow: unknown }).err === null &&
+            (calledWith as { err: unknown; allow: unknown }).allow === origin
           );
         },
       ),
@@ -141,8 +141,8 @@ describe("Feature: cors-helmet-security-headers, Property 3", () => {
           // Should call cb with an Error and false
           return (
             calledWith !== null &&
-            (calledWith as any).err instanceof Error &&
-            (calledWith as any).allow === false
+            (calledWith as { err: unknown; allow: unknown }).err instanceof Error &&
+            (calledWith as { err: unknown; allow: unknown }).allow === false
           );
         },
       ),
@@ -159,7 +159,7 @@ describe("Feature: cors-helmet-security-headers, Property 4", () => {
      * Validates: Requirements 2.4
      */
     fc.assert(
-      fc.property(fc.constant(null), (_) => {
+      fc.property(fc.constant(null), () => {
         return CORS_CONFIG.credentials === true;
       }),
       { numRuns: 100 },
@@ -175,7 +175,7 @@ describe("Feature: cors-helmet-security-headers, Property 5", () => {
      * Validates: Requirements 2.6, 2.7
      */
     fc.assert(
-      fc.property(fc.constant(null), (_) => {
+      fc.property(fc.constant(null), () => {
         const requiredHeaders = [
           "Authorization",
           "Content-Type",
@@ -214,7 +214,7 @@ describe("Feature: cors-helmet-security-headers, Property 6", () => {
     fc.assert(
       fc.property(
         fc.array(fc.string({ minLength: 1 }), { minLength: 1 }),
-        (allowlist) => {
+        () => {
           return (
             CORS_CONFIG.maxAge === 86400 &&
             CORS_CONFIG.optionsSuccessStatus === 204 &&

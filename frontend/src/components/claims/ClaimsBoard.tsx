@@ -101,22 +101,6 @@ export function ClaimsBoard() {
 
   useRealtimeTallies(claimIds, handleTallyUpdate);
 
-  // ── Focus management (Req 9.2) ────────────────────────────────────────────
-  // Track the element that triggered a detail panel so we can return focus on close.
-  const triggerRef = useRef<HTMLElement | null>(null);
-
-  const openDetailPanel = useCallback((trigger: HTMLElement) => {
-    triggerRef.current = trigger;
-    // Detail panel focus trapping would be implemented here.
-    // For now we store the trigger for focus return on close.
-  }, []);
-
-  const closeDetailPanel = useCallback(() => {
-    // Return focus to the element that opened the panel (Req 9.2).
-    triggerRef.current?.focus();
-    triggerRef.current = null;
-  }, []);
-
   // ── Filter change resets page to 1 ───────────────────────────────────────
   const handleFiltersChange = useCallback(
     (newFilters: ClaimFilters) => {

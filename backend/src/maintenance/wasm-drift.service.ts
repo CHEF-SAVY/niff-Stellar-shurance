@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { ConfigService } from '@nestjs/config';
-import { SorobanRpc } from '@stellar/stellar-sdk';
+import { rpc as SorobanRpc } from '@stellar/stellar-sdk';
 import * as fs from 'fs';
 import * as path from 'path';
 import { PrismaService } from '../prisma/prisma.service';
@@ -55,24 +55,19 @@ export class WasmDriftService {
   }
 
   private async fetchOnChainWasmHash(server: SorobanRpc.Server, contractId: string): Promise<string> {
-    // getLedgerEntries for the ContractCode entry returns the wasm hash in the key
-    const { entries } = await server.getLedgerEntries(
-      // ContractData key for the contract instance stores the wasm hash
-      // We use getContractWasmByContractId which is available in stellar-sdk >= 12
-      ...([] as any[]),
-    );
-    // Fallback: use getContractWasmByContractId if available, else parse instance
-    const instance = await (server as any).getContractWasmByContractId?.(contractId);
-    if (instance?.wasmHash) return instance.wasmHash as string;
+    // Prefer getContractWasmByContractId if available (stellar-sdk >= 12), else parse instance manually
+    const extServer = server as unknown as { getContractWasmByContractId?: (id: string) => Promise<{ wasmHash: string } | null> };
+    const instance = await extServer.getContractWasmByContractId?.(contractId);
+    if (instance?.wasmHash) return instance.wasmHash;
 
     // Manual path: fetch contract instance ledger entry and extract wasm hash
-    const { xdr: xdrLib, Contract } = await import('@stellar/stellar-sdk');
+    const { Contract } = await import('@stellar/stellar-sdk');
     const contract = new Contract(contractId);
     const key = contract.getFootprint();
-    const result = await server.getLedgerEntries(key as any);
+    const result = await server.getLedgerEntries(key);
     if (!result.entries?.length) throw new Error(`No ledger entry for contract ${contractId}`);
     const entry = result.entries[0];
-    const data = xdrLib.LedgerEntryData.fromXDR(entry.xdr, 'base64');
+    const data = entry.val;
     const wasmHash = data.contractData().val().instance().executable().wasmHash();
     return Buffer.from(wasmHash).toString('hex');
   }

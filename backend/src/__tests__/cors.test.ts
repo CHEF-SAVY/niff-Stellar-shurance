@@ -59,7 +59,7 @@ function buildTestApp(frontendOrigins: string[], adminOrigins: string[] = []) {
       origin: (origin, cb) => {
         if (!origin) return cb(null, true);
         const allowed = [...frontendOrigins, ...adminOrigins];
-        if (allowed.includes(origin)) return cb(null, origin as any);
+        if (allowed.includes(origin)) return cb(null, origin);
         return cb(new Error("Not allowed by CORS"));
       },
       credentials: true,

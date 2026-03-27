@@ -26,6 +26,7 @@ import { SubmitTransactionDto } from './dto/submit-transaction.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { WalletAddress } from '../auth/decorators/wallet-address.decorator';
 import { RateLimitGuard } from '../rate-limit/rate-limit.guard';
+import { MAX_LIMIT, DEFAULT_LIMIT } from '../helpers/pagination';
 
 @ApiTags('claims')
 @Controller('claims')

@@ -61,6 +61,7 @@ describe('Feature Flags (integration)', () => {
     await app.init();
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
   function contextFor(handler: Function, klass: Function, path: string): ExecutionContext {
     return {
       getHandler: () => handler,
@@ -70,7 +71,7 @@ describe('Feature Flags (integration)', () => {
         getResponse: () => ({}),
         getNext: () => undefined,
       }),
-    } as ExecutionContext;
+    } as unknown as ExecutionContext;
   }
 
   it('keeps experimental endpoints unreachable by default (404)', async () => {

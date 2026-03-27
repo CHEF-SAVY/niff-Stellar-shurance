@@ -30,7 +30,7 @@ export class BuildClaimTransactionDto {
   @Matches(/^G[A-Z2-7]{55}$/, {
     message: 'holder must be a valid Stellar public key (G...)',
   })
-  holder: string;
+  holder!: string;
 
   @ApiProperty({
     description: 'The ID of the policy to claim against.',
@@ -38,7 +38,7 @@ export class BuildClaimTransactionDto {
   })
   @IsInt()
   @IsPositive()
-  policyId: number;
+  policyId!: number;
 
   @ApiProperty({
     description: 'Claim amount in stroops as an integer string.',
@@ -46,7 +46,7 @@ export class BuildClaimTransactionDto {
   })
   @IsString()
   @Validate(PositiveIntStringConstraint)
-  amount: string;
+  amount!: string;
 
   @ApiProperty({
     description: 'Narrative description of the claim.',
@@ -54,7 +54,7 @@ export class BuildClaimTransactionDto {
   })
   @IsString()
   @MaxLength(1000)
-  details: string;
+  details!: string;
 
   @ApiProperty({
     description: 'List of IPFS URLs (or CIDs) for evidence images.',
@@ -62,5 +62,5 @@ export class BuildClaimTransactionDto {
   })
   @IsArray()
   @IsString({ each: true })
-  imageUrls: string[];
+  imageUrls!: string[];
 }

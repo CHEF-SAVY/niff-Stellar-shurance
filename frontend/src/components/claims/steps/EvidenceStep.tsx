@@ -3,8 +3,7 @@
 import React, { useState, useCallback } from 'react';
 import { Button, Progress, Label } from '@/components/ui';
 import { uploadFileWithProgress, UploadProgress } from '@/lib/ipfs-upload';
-import { X, Upload, FileText, AlertTriangle, CheckCircle2, Loader2 } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { X, Upload, FileText, AlertTriangle, CheckCircle2 } from 'lucide-react';
 
 interface FileUploadState {
   file: File;
@@ -104,17 +103,6 @@ export function EvidenceStep({ imageUrls, onChange }: EvidenceStepProps) {
 
     if (upload.url) {
       onChange(imageUrls.filter(u => u !== upload.url));
-    }
-  };
-
-  const removeUrl = (url: string) => {
-    onChange(imageUrls.filter(u => u !== url));
-    // Also find and remove from local state if it exists
-    const id = Object.keys(uploads).find(k => uploads[k].url === url);
-    if (id) {
-      const newUploads = { ...uploads };
-      delete newUploads[id];
-      setUploads(newUploads);
     }
   };
 
