@@ -10,7 +10,9 @@
       "Bash(grep -r ThemeProvider /home/ljtwp/Desktop/drips/niff/frontend/src/ --include=*.tsx --include=*.ts -l)",
       "Bash(grep -n \"toast\\\\|useToast\" /home/ljtwp/Desktop/drips/niff/frontend/src/app/policy/[id]/claim/page.tsx)",
       "Bash(git -C /home/ljtwp/Desktop/drips/niff add frontend/package-lock.json)",
-      "Bash(git -C /home/ljtwp/Desktop/drips/niff status --short)"
+      "Bash(git -C /home/ljtwp/Desktop/drips/niff status --short)",
+      "Bash(npm audit:*)",
+      "Bash(echo \"EXIT:$?\")"
     ]
   }
 }
