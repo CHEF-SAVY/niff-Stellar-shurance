@@ -66,6 +66,18 @@ pub struct PolicyInitiated {
     pub end_ledger: u32,
 }
 
+/// Emitted when the payout beneficiary is set or changed (including at policy initiation when non-empty).
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct BeneficiaryUpdated {
+    #[topic]
+    pub holder: Address,
+    #[topic]
+    pub policy_id: u32,
+    pub old_beneficiary: Option<Address>,
+    pub new_beneficiary: Option<Address>,
+}
+
 /// Event emitted by `renew_policy`.
 #[contractevent]
 #[derive(Clone, Debug)]
@@ -209,6 +221,7 @@ pub fn initiate_policy(
     safety_score: u32,
     base_amount: i128,
     asset: Address,
+    beneficiary: Option<Address>,
 ) -> Result<Policy, PolicyError> {
     // Check granular pause: policy binding should be blocked if bind_paused
     storage::assert_bind_not_paused(env);
@@ -276,6 +289,7 @@ pub fn initiate_policy(
         start_ledger: current_ledger,
         end_ledger,
         asset: asset.clone(),
+        beneficiary: beneficiary.clone(),
         terminated_at_ledger: 0,
         termination_reason: crate::types::TerminationReason::None,
         terminated_by_admin: false,
@@ -301,5 +315,52 @@ pub fn initiate_policy(
     }
     .publish(env);
 
+    if let Some(ref b) = beneficiary {
+        BeneficiaryUpdated {
+            holder: holder.clone(),
+            policy_id,
+            old_beneficiary: None,
+            new_beneficiary: Some(b.clone()),
+        }
+        .publish(env);
+    }
+
     Ok(policy)
+}
+
+/// Update the optional payout beneficiary. Only the policy holder may call (authenticated via `holder`).
+///
+/// Admin cannot change this without the holder signing the transaction.
+pub fn set_beneficiary(
+    env: &Env,
+    holder: Address,
+    policy_id: u32,
+    new_beneficiary: Option<Address>,
+) -> Result<(), PolicyError> {
+    holder.require_auth();
+
+    let mut policy = storage::get_policy(env, &holder, policy_id).ok_or(PolicyError::NotFound)?;
+
+    if policy.holder != holder {
+        return Err(PolicyError::Unauthorized);
+    }
+
+    let old_beneficiary = policy.beneficiary.clone();
+    if old_beneficiary == new_beneficiary {
+        return Ok(());
+    }
+
+    policy.beneficiary = new_beneficiary.clone();
+    validate::check_policy(&policy).map_err(|_| PolicyError::PolicyValidation)?;
+    storage::set_policy(env, &holder, policy_id, &policy);
+
+    BeneficiaryUpdated {
+        holder: holder.clone(),
+        policy_id,
+        old_beneficiary,
+        new_beneficiary,
+    }
+    .publish(env);
+
+    Ok(())
 }

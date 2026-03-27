@@ -63,6 +63,7 @@ pub fn initiate_policy(
         start_ledger: now,
         end_ledger,
         asset: storage::get_token(env),
+        beneficiary: None,
         terminated_at_ledger: 0,
         termination_reason: TerminationReason::None,
         terminated_by_admin: false,

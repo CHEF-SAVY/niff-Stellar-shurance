@@ -79,8 +79,19 @@ function makeInitiatePolicyVector(
     nativeToScVal(opts.safetyScore, { type: 'u32' }),
     nativeToScVal(opts.baseAmount, { type: 'i128' }),
     new Address(PLACEHOLDER_ASSET).toScVal(),
+    nativeToScVal(null),
   ];
-  const names = ['holder','policy_type','region','age_band','coverage_type','safety_score','base_amount','asset'];
+  const names = [
+    'holder',
+    'policy_type',
+    'region',
+    'age_band',
+    'coverage_type',
+    'safety_score',
+    'base_amount',
+    'asset',
+    'beneficiary',
+  ];
   return {
     id,
     function: 'initiate_policy',
@@ -96,6 +107,7 @@ function makeInitiatePolicyVector(
       safety_score:  opts.safetyScore,
       base_amount:   opts.baseAmount.toString(),
       asset:         PLACEHOLDER_ASSET,
+      beneficiary:   null,
     },
   };
 }

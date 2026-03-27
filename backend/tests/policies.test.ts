@@ -145,6 +145,8 @@ test("GET /policies returns all policies with correct DTO shape", async () => {
   expect(dto).toHaveProperty("expiry_countdown");
   expect(dto).toHaveProperty("claims");
   expect(dto).toHaveProperty("_link");
+  expect(dto).toHaveProperty("beneficiary");
+  expect(dto.beneficiary).toBeNull();
 
   // No internal fields exposed
   expect(dto).not.toHaveProperty("global_seq");
@@ -338,6 +340,7 @@ test("GET /policies/:holder/:policy_id returns 200 with correct policy", async (
   expect(status).toBe(200);
   expect(body.holder).toBe(holder);
   expect(body.policy_id).toBe(1);
+  expect(body.beneficiary).toBeNull();
 });
 
 test("GET /policies/:holder/:policy_id returns 404 for unknown policy", async () => {

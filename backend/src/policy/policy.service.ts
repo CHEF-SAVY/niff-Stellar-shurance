@@ -11,12 +11,12 @@ export class PolicyService {
       holder: dto.holder,
       policyType: dto.policy_type,
       region: dto.region,
-      coverage: BigInt(dto.coverage),
-      age: dto.age,
-      riskScore: dto.risk_score,
+      ageBand: dto.age_band,
+      coverageType: dto.coverage_type,
+      safetyScore: dto.safety_score,
+      baseAmount: BigInt(dto.base_amount),
       asset: dto.asset,
-      startLedger: dto.start_ledger,
-      durationLedgers: dto.duration_ledgers,
+      beneficiary: dto.beneficiary,
     });
   }
 }

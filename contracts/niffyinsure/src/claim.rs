@@ -498,17 +498,22 @@ fn payout(env: &Env, claim: &Claim) -> Result<(), Error> {
         return Err(Error::InsufficientTreasury);
     }
 
+    let payout_to = policy
+        .beneficiary
+        .clone()
+        .unwrap_or_else(|| policy.holder.clone());
+
     crate::token::transfer(
         env,
         &policy.asset,
         &env.current_contract_address(),
-        &claim.claimant,
+        &payout_to,
         claim.amount,
     );
 
     ClaimProcessed {
         claim_id: claim.claim_id,
-        recipient: claim.claimant.clone(),
+        recipient: payout_to,
         amount: claim.amount,
     }
     .publish(env);

@@ -201,35 +201,6 @@ impl NiffyInsure {
         claim::get_claim(&env, claim_id)
     }
 
-    pub fn file_claim(
-        env: Env,
-        holder: Address,
-        policy_id: u32,
-        amount: i128,
-        details: String,
-        image_urls: Vec<String>,
-    ) -> u64 {
-        holder.require_auth();
-        claim::file_claim(&env, &holder, policy_id, amount, &details, &image_urls)
-            .unwrap_or_else(|e| panic_with_error!(&env, e))
-    }
-
-    pub fn vote_on_claim(
-        env: Env,
-        voter: Address,
-        claim_id: u64,
-        vote: types::VoteOption,
-    ) -> types::ClaimStatus {
-        voter.require_auth();
-        claim::vote_on_claim(&env, &voter, claim_id, &vote)
-            .unwrap_or_else(|e| panic_with_error!(&env, e))
-    }
-
-    pub fn finalize_claim(env: Env, claim_id: u64) -> types::ClaimStatus {
-        claim::finalize_claim(&env, claim_id)
-            .unwrap_or_else(|e| panic_with_error!(&env, e))
-    }
-
     pub fn get_claim_counter(env: Env) -> u64 {
         storage::get_claim_counter(&env)
     }
@@ -327,6 +298,7 @@ impl NiffyInsure {
         safety_score: u32,
         base_amount: i128,
         asset: Address,
+        beneficiary: Option<Address>,
     ) -> Result<types::Policy, policy::PolicyError> {
         policy::initiate_policy(
             &env,
@@ -338,7 +310,18 @@ impl NiffyInsure {
             safety_score,
             base_amount,
             asset,
+            beneficiary,
         )
+    }
+
+    /// Set or clear the payout beneficiary. Holder-authenticated only.
+    pub fn set_beneficiary(
+        env: Env,
+        holder: Address,
+        policy_id: u32,
+        beneficiary: Option<Address>,
+    ) -> Result<(), policy::PolicyError> {
+        policy::set_beneficiary(&env, holder, policy_id, beneficiary)
     }
 
     /// Read-only: retrieve a persisted policy by (holder, policy_id).
@@ -600,6 +583,7 @@ impl NiffyInsure {
             start_ledger: 1,
             end_ledger,
             asset: token,
+            beneficiary: None,
             terminated_at_ledger: 0,
             termination_reason: TerminationReason::None,
             terminated_by_admin: false,

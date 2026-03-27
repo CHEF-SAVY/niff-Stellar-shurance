@@ -27,6 +27,11 @@ export interface Policy {
   end_ledger: number;
   /** Globally unique surrogate key for cursor pagination (assigned at insert). */
   global_seq: number;
+  /**
+   * Optional Stellar address receiving claim payouts when set on-chain.
+   * Omitted or null means payouts go to the holder.
+   */
+  beneficiary?: string | null;
 }
 
 /** On-chain Claim record (internal representation). */

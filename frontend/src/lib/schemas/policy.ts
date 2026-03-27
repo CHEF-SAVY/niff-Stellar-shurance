@@ -34,6 +34,8 @@ export const PolicySchema = z.object({
   transactionHash: z.string().optional(),
   createdAt: z.string(),
   updatedAt: z.string(),
+  /** Payout destination when set on-chain (G...); absent if payouts go to the holder. */
+  beneficiaryAddress: z.string().optional().nullable(),
 })
 
 export type Policy = z.infer<typeof PolicySchema>

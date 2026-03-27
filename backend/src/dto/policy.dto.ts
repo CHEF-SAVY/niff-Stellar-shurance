@@ -130,6 +130,11 @@ export interface PolicyDto {
    */
   claims: ClaimSummaryDto[];
   /**
+   * Optional payout beneficiary (on-chain). When set, approved claim proceeds
+   * are sent here instead of the holder. Null/omitted means holder receives payout.
+   */
+  beneficiary: string | null;
+  /**
    * Self-link for this policy resource.
    * @example "/policies/GABC.../1"
    */
@@ -188,6 +193,7 @@ export function toPolicyDto(p: Policy, claims: Claim[]): PolicyDto {
       avg_ledger_close_seconds: 5,
     },
     claims: claims.map(toClaimSummaryDto),
+    beneficiary: p.beneficiary ?? null,
     _link: `/policies/${encodeURIComponent(p.holder)}/${p.policy_id}`,
   };
 }

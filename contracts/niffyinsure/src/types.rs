@@ -274,6 +274,13 @@ pub struct Policy {
     /// SEP-41 asset contract used for this policy's premium payment and claim payout.
     /// Must be allowlisted at the time of policy initiation.
     pub asset: Address,
+    /// Optional payout destination for approved claims. When unset (`None`), funds are sent to `holder`.
+    ///
+    /// **Phishing / social-engineering risk:** A malicious interface could trick the holder into
+    /// setting a beneficiary controlled by an attacker, diverting all claim proceeds. Holders must
+    /// verify the beneficiary address carefully (compare on a second channel, hardware wallet
+    /// screen, or multisig quorum) before signing `initiate_policy` or `set_beneficiary`.
+    pub beneficiary: Option<Address>,
     // Termination fields
     pub terminated_at_ledger: u32,
     pub termination_reason: TerminationReason,

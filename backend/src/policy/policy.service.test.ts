@@ -6,7 +6,12 @@
  */
 
 import type { BuildTransactionResult } from '../rpc/soroban.service';
-import { PolicyTypeEnum, RegionTierEnum } from '../quote/dto/generate-premium.dto';
+import {
+  AgeBandEnum,
+  CoverageTypeEnum,
+  PolicyTypeEnum,
+  RegionTierEnum,
+} from '../quote/dto/generate-premium.dto';
 import type { BuildTransactionDto } from './dto/build-transaction.dto';
 import { PolicyService } from './policy.service';
 
@@ -27,9 +32,10 @@ const VALID_DTO: BuildTransactionDto = {
   holder: VALID_HOLDER,
   policy_type: PolicyTypeEnum.Auto,
   region: RegionTierEnum.Low,
-  coverage: '1000000000',
-  age: 30,
-  risk_score: 5,
+  age_band: AgeBandEnum.Adult,
+  coverage_type: CoverageTypeEnum.Basic,
+  safety_score: 74,
+  base_amount: '1000000000',
 };
 
 describe('PolicyService.buildTransaction', () => {
@@ -53,13 +59,13 @@ describe('PolicyService.buildTransaction', () => {
     expect(result.memoConvention).toBeTruthy();
   });
 
-  it('passes coverage as BigInt to the Soroban client', async () => {
+  it('passes baseAmount as BigInt to the Soroban client', async () => {
     mockBuild.mockResolvedValue(SUCCESS_RESULT);
 
     await service.buildTransaction(VALID_DTO);
 
     expect(mockBuild).toHaveBeenCalledWith(
-      expect.objectContaining({ coverage: BigInt('1000000000') }),
+      expect.objectContaining({ baseAmount: BigInt('1000000000') }),
     );
   });
 
@@ -70,20 +76,17 @@ describe('PolicyService.buildTransaction', () => {
     await expect(service.buildTransaction(VALID_DTO)).rejects.toBe(error);
   });
 
-  it('passes optional start_ledger and duration_ledgers to the client', async () => {
+  it('passes optional beneficiary to the client', async () => {
     mockBuild.mockResolvedValue(SUCCESS_RESULT);
+    const ben = 'GBZXGXC7FNSLJ7C2ZFXFPN2Z6WQI4HIQ7S3STHXE2E5F7VRUXG4ZGSN4';
 
     await service.buildTransaction({
       ...VALID_DTO,
-      start_ledger: 200000,
-      duration_ledgers: 500000,
+      beneficiary: ben,
     });
 
     expect(mockBuild).toHaveBeenCalledWith(
-      expect.objectContaining({
-        startLedger: 200000,
-        durationLedgers: 500000,
-      }),
+      expect.objectContaining({ beneficiary: ben }),
     );
   });
 });
