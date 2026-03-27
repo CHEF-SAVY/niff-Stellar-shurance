@@ -37,7 +37,7 @@ export class RateLimitService implements OnModuleInit {
    */
   private async initializeDefaults(): Promise<void> {
     try {
-      const client = (this.redis as any).client;
+      const client = this.redis.getClient();
       const exists = await client.exists(REDIS_KEYS.DEFAULTS);
       
       if (!exists) {
@@ -61,7 +61,7 @@ export class RateLimitService implements OnModuleInit {
    */
   private async getWindowSize(): Promise<number> {
     try {
-      const client = (this.redis as any).client;
+      const client = this.redis.getClient();
       const windowSize = await client.hget(REDIS_KEYS.DEFAULTS, 'windowSize');
       return windowSize ? parseInt(windowSize, 10) : RATE_LIMIT_DEFAULTS.WINDOW_SIZE_LEDGERS;
     } catch (error) {
@@ -75,7 +75,7 @@ export class RateLimitService implements OnModuleInit {
    */
   async getEffectiveLimit(policyId: string): Promise<number> {
     try {
-      const client = (this.redis as any).client;
+      const client = this.redis.getClient();
       const customLimit = await client.hget(REDIS_KEYS.CONFIG(policyId), 'limit');
       
       if (customLimit) {
@@ -98,7 +98,7 @@ export class RateLimitService implements OnModuleInit {
     currentLedger: number,
   ): Promise<{ count: number; windowAnchor: number }> {
     try {
-      const client = (this.redis as any).client;
+      const client = this.redis.getClient();
       const key = REDIS_KEYS.COUNTER(policyId);
       const data = await client.hgetall(key);
 
@@ -131,7 +131,7 @@ export class RateLimitService implements OnModuleInit {
    */
   async checkAndIncrement(policyId: string, currentLedger: number): Promise<RateLimitCheckResult> {
     try {
-      const client = (this.redis as any).client;
+      const client = this.redis.getClient();
       
       // Check and reset window if needed
       const { count, windowAnchor } = await this.checkAndResetWindow(policyId, currentLedger);
@@ -200,7 +200,7 @@ export class RateLimitService implements OnModuleInit {
    */
   async getCounterState(policyId: string): Promise<CounterState> {
     try {
-      const client = (this.redis as any).client;
+      const client = this.redis.getClient();
       const counterData = await client.hgetall(REDIS_KEYS.COUNTER(policyId));
       const configData = await client.hgetall(REDIS_KEYS.CONFIG(policyId));
       
@@ -241,7 +241,7 @@ export class RateLimitService implements OnModuleInit {
     }
 
     try {
-      const client = (this.redis as any).client;
+      const client = this.redis.getClient();
       await client.hset(REDIS_KEYS.CONFIG(policyId), 'limit', limit.toString());
       this.logger.log(`Rate limit set for ${policyId}: ${limit} (by ${actor})`);
     } catch (error) {
@@ -255,7 +255,7 @@ export class RateLimitService implements OnModuleInit {
    */
   async enableOverride(policyId: string, actor: string, reason: string): Promise<void> {
     try {
-      const client = (this.redis as any).client;
+      const client = this.redis.getClient();
       await client.hset(REDIS_KEYS.CONFIG(policyId), 'overrideActive', 'true');
       this.logger.log(`Rate limit override enabled for ${policyId} by ${actor}: ${reason}`);
     } catch (error) {
@@ -269,7 +269,7 @@ export class RateLimitService implements OnModuleInit {
    */
   async disableOverride(policyId: string, actor: string): Promise<void> {
     try {
-      const client = (this.redis as any).client;
+      const client = this.redis.getClient();
       await client.hset(REDIS_KEYS.CONFIG(policyId), 'overrideActive', 'false');
       this.logger.log(`Rate limit override disabled for ${policyId} by ${actor}`);
     } catch (error) {

@@ -196,7 +196,7 @@ The implementation uses Redis for O(1) counter operations, NestJS guards for req
     - Log initialization status
     - _Requirements: 6.1, 6.2, 6.3_
 
-- [x] 12. Add OpenAPI documentation
+- [ ] 12. Add OpenAPI documentation
   - [x] 12.1 Document rate limit responses
     - Add @ApiResponse decorators for 429 status to claim endpoints
     - Document RateLimitException response schema

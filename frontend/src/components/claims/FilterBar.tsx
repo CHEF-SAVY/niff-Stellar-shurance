@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useRef, useCallback } from "react";
-import type { ClaimFilters, BoardClaimStatus } from "./types";
+import type { ClaimFilters } from "./types";
 
 export interface FilterBarProps {
   filters: ClaimFilters;

@@ -288,16 +288,11 @@ pub fn vote_on_claim(
     // Auto-finalize on majority.
     let total = snapshot.len();
     let majority = total / 2 + 1;
-    let newly_rejected;
     if claim.approve_votes >= majority {
         claim.status = ClaimStatus::Approved;
-        newly_rejected = false;
     } else if claim.reject_votes >= majority {
         claim.status = ClaimStatus::Rejected;
         claim.appeal_open_deadline_ledger = now.saturating_add(ledger::APPEAL_OPEN_WINDOW_LEDGERS);
-        newly_rejected = true;
-    } else {
-        newly_rejected = false;
     }
 
     let newly_rejected = claim.status == ClaimStatus::Rejected;
@@ -340,15 +335,15 @@ pub fn finalize_claim(env: &Env, claim_id: u64) -> Result<ClaimStatus, Error> {
         return Err(Error::VotingWindowStillOpen);
     }
 
-    let newly_rejected;
+    let _newly_rejected;
     if claim.approve_votes > claim.reject_votes {
         claim.status = ClaimStatus::Approved;
-        newly_rejected = false;
+        _newly_rejected = false;
     } else {
         // Tie or reject plurality → Rejected (insurer wins tie).
         claim.status = ClaimStatus::Rejected;
         claim.appeal_open_deadline_ledger = now.saturating_add(ledger::APPEAL_OPEN_WINDOW_LEDGERS);
-        newly_rejected = true;
+        _newly_rejected = true;
     }
 
     let newly_rejected = claim.status == ClaimStatus::Rejected;

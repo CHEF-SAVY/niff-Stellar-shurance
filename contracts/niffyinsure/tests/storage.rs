@@ -162,6 +162,11 @@ fn set_and_get_claim_round_trip() {
             approve_votes: 0,
             reject_votes: 0,
             filed_at: 1,
+            appeal_open_deadline_ledger: 0,
+            appeals_count: 0,
+            appeal_deadline_ledger: 0,
+            appeal_approve_votes: 0,
+            appeal_reject_votes: 0,
         };
         storage::set_claim(&env, &claim);
         let loaded = storage::get_claim(&env, 1).expect("claim must exist");

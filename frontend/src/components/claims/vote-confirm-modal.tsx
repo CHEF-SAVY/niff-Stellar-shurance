@@ -74,8 +74,8 @@ export function VoteConfirmModal({
         >
           <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" aria-hidden="true" />
           <span>
-            If you're using a wallet's built-in browser, extension-based signing
-            may not be available. Use the wallet's native signing prompt instead.
+            If you&apos;re using a wallet&apos;s built-in browser, extension-based signing
+            may not be available. Use the wallet&apos;s native signing prompt instead.
           </span>
         </div>
 

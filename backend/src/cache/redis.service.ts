@@ -37,6 +37,10 @@ export class RedisService implements OnModuleDestroy {
     await this.client.quit();
   }
 
+  getClient(): Redis {
+    return this.client;
+  }
+
   /**
    * Get cached value
    */

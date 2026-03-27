@@ -8,7 +8,7 @@ export class SubmitTransactionDto {
   })
   @IsString()
   @IsNotEmpty()
-  transactionXdr: string;
+  transactionXdr!: string;
 
   @ApiProperty({
     description: 'Policy ID for rate limiting (format: holderAddress:policyId)',
@@ -16,5 +16,5 @@ export class SubmitTransactionDto {
   })
   @IsString()
   @IsNotEmpty()
-  policyId: string;
+  policyId!: string;
 }

@@ -24,7 +24,6 @@ pub const SAFETY_SCORE_MAX: u32 = 100;
 // should be deferred until the appeal deadline passes. Implement by adding a
 // `deactivation_pending_until_ledger: u32` field to Policy and skipping the
 // `is_active = false` write until that ledger is reached.
-pub const STRIKE_DEACTIVATION_THRESHOLD: u32 = 3;
 
 // ── Ledger window constants (re-exported from ledger.rs for ABI visibility) ───
 //

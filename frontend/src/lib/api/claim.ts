@@ -1,4 +1,3 @@
-import { IpfsUploadResponse } from '../types/claim';
 import { getConfig } from '@/config/env';
 
 const { apiUrl: API_BASE_URL } = getConfig();

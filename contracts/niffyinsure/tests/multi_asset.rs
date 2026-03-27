@@ -258,6 +258,11 @@ fn claim_payout_uses_policy_bound_asset() {
         approve_votes: 3,
         reject_votes: 0,
         filed_at: 100,
+        appeal_open_deadline_ledger: 0,
+        appeals_count: 0,
+        appeal_deadline_ledger: 0,
+        appeal_approve_votes: 0,
+        appeal_reject_votes: 0,
     };
     t.env.as_contract(&t.contract_id, || {
         niffyinsure::storage::set_claim(&t.env, &claim);
@@ -311,6 +316,11 @@ fn claim_with_disallowed_bound_asset_is_rejected() {
         approve_votes: 3,
         reject_votes: 0,
         filed_at: 100,
+        appeal_open_deadline_ledger: 0,
+        appeals_count: 0,
+        appeal_deadline_ledger: 0,
+        appeal_approve_votes: 0,
+        appeal_reject_votes: 0,
     };
     t.env.as_contract(&t.contract_id, || {
         niffyinsure::storage::set_claim(&t.env, &claim);

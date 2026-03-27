@@ -49,6 +49,13 @@
 import { createHmac } from 'crypto';
 import { BadRequestException } from '@nestjs/common';
 
+export class CursorError extends BadRequestException {
+  constructor(message: string) {
+    super(message);
+    this.name = 'CursorError';
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Configuration
 // ---------------------------------------------------------------------------
@@ -213,6 +220,34 @@ export function buildKeysetWhere(after?: string): KeysetWhere | undefined {
       { createdAt: { equals: ts }, id: { lt: id } },
     ],
   };
+}
+
+/**
+ * Paginates an in-memory array using opaque offset-encoded cursors.
+ * Compatible with the PageParams / CursorPageResult contract used by list endpoints.
+ */
+export function paginate<T>(items: T[], params: PageParams): CursorPageResult<T> {
+  const limit = clampLimit(params.limit);
+  const total = items.length;
+
+  let startIndex = 0;
+  if (params.after) {
+    const decoded = Buffer.from(params.after, 'base64url').toString('utf8');
+    const offset = Number(decoded);
+    if (!Number.isInteger(offset) || offset < 0) {
+      throw new CursorError(`Invalid cursor: "${params.after}"`);
+    }
+    startIndex = offset;
+  }
+
+  const data = items.slice(startIndex, startIndex + limit);
+  const nextOffset = startIndex + data.length;
+  const next_cursor =
+    data.length === limit && nextOffset < total
+      ? Buffer.from(String(nextOffset), 'utf8').toString('base64url')
+      : null;
+
+  return { data, next_cursor, total };
 }
 
 /**

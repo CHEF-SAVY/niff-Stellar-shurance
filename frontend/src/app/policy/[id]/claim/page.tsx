@@ -5,13 +5,12 @@ import { useParams, useRouter } from 'next/navigation';
 import { PolicyAPI } from '@/lib/api/policy';
 import { Policy } from '@/lib/schemas/policy';
 import { ClaimWizard } from '@/components/claims/ClaimWizard';
-import { Button, Card, CardContent, Skeleton, useToast } from '@/components/ui';
+import { Button, Card, CardContent, Skeleton } from '@/components/ui';
 import { AlertCircle, ArrowLeft } from 'lucide-react';
 
 export default function FileClaimPage() {
   const params = useParams();
   const router = useRouter();
-  const { toast } = useToast();
   const policyId = params.id as string;
 
   const [policy, setPolicy] = useState<Policy | null>(null);

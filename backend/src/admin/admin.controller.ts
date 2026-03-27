@@ -114,7 +114,7 @@ export class AdminController {
   @HttpCode(HttpStatus.ACCEPTED)
   @ApiOperation({ summary: 'Submit a privacy request (anonymize or delete off-chain data)' })
   async submitPrivacyRequest(@Body() dto: PrivacyRequestDto, @Req() req: Request) {
-    const actor = (req.user as any)?.walletAddress ?? 'unknown';
+    const actor = (req.user as { walletAddress?: string })?.walletAddress ?? 'unknown';
     return this.privacyService.handleRequest({
       subjectWalletAddress: dto.subjectWalletAddress,
       requestType: dto.requestType,

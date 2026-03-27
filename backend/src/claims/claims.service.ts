@@ -2,6 +2,9 @@ import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Prisma } from '@prisma/client';
 import { SorobanService } from '../rpc/soroban.service';
+import { PrismaService } from '../prisma/prisma.service';
+import { RedisService } from '../cache/redis.service';
+import { SanitizationService } from './sanitization.service';
 import {
   ClaimDetailResponseDto,
   ClaimMetadataDto,

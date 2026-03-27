@@ -31,7 +31,7 @@ export function OfflineBanner() {
       style={{ paddingTop: `calc(0.5rem + env(safe-area-inset-top, 0px))` }}
     >
       <WifiOff className="h-4 w-4 shrink-0" aria-hidden="true" />
-      <span>You're offline. Some features may be unavailable.</span>
+      <span>You&apos;re offline. Some features may be unavailable.</span>
     </div>
   )
 }

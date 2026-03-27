@@ -17,10 +17,10 @@ interface ClaimWizardProps {
 }
 
 const STEPS = [
-  { label: 'Amount', description: 'Enter claim amount' },
-  { label: 'Narrative', description: 'Describe the incident' },
-  { label: 'Evidence', description: 'Upload proof' },
-  { label: 'Review', description: 'Confirm & Sign' },
+  { id: '1', title: 'Amount', description: 'Enter claim amount' },
+  { id: '2', title: 'Narrative', description: 'Describe the incident' },
+  { id: '3', title: 'Evidence', description: 'Upload proof' },
+  { id: '4', title: 'Review', description: 'Confirm & Sign' },
 ];
 
 export function ClaimWizard({ policyId, maxCoverage }: ClaimWizardProps) {
@@ -78,7 +78,7 @@ export function ClaimWizard({ policyId, maxCoverage }: ClaimWizardProps) {
       const signedXdr = await signTransaction(unsignedXdr);
 
       // 3. Submit signed transaction
-      const result = await ClaimAPI.submitTransaction(signedXdr);
+      await ClaimAPI.submitTransaction(signedXdr);
 
       // 4. Success handling
       setIsSuccess(true);
@@ -134,33 +134,37 @@ export function ClaimWizard({ policyId, maxCoverage }: ClaimWizardProps) {
               Policy #{policyId} • Max Coverage: {maxCoverage} stroops
             </CardDescription>
           </div>
-          <Stepper steps={STEPS} activeStep={activeStep} className="hidden md:flex" />
+          <Stepper
+            steps={STEPS.map((s, i) => ({ ...s, status: i < activeStep ? 'completed' : i === activeStep ? 'active' : 'pending' as const }))}
+            currentStep={activeStep}
+            className="hidden md:flex"
+          />
         </div>
       </CardHeader>
       <CardContent className="space-y-6">
-        <StepContent active={activeStep === 0}>
-          <AmountStep 
-            amount={formData.amount} 
+        <StepContent title={STEPS[0].title} isActive={activeStep === 0} isCompleted={activeStep > 0}>
+          <AmountStep
+            amount={formData.amount}
             onChange={(val) => setFormData(prev => ({ ...prev, amount: val }))}
             maxCoverage={maxCoverage}
           />
         </StepContent>
 
-        <StepContent active={activeStep === 1}>
-          <NarrativeStep 
-            details={formData.details} 
+        <StepContent title={STEPS[1].title} isActive={activeStep === 1} isCompleted={activeStep > 1}>
+          <NarrativeStep
+            details={formData.details}
             onChange={(val) => setFormData(prev => ({ ...prev, details: val }))}
           />
         </StepContent>
 
-        <StepContent active={activeStep === 2}>
-          <EvidenceStep 
-            imageUrls={formData.imageUrls} 
+        <StepContent title={STEPS[2].title} isActive={activeStep === 2} isCompleted={activeStep > 2}>
+          <EvidenceStep
+            imageUrls={formData.imageUrls}
             onChange={(urls) => setFormData(prev => ({ ...prev, imageUrls: urls }))}
           />
         </StepContent>
 
-        <StepContent active={activeStep === 3}>
+        <StepContent title={STEPS[3].title} isActive={activeStep === 3} isCompleted={activeStep > 3}>
           <ReviewStep data={formData} policyId={policyId} />
         </StepContent>
 

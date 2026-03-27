@@ -78,7 +78,7 @@ function parseEnv(): Env {
   })
 
   if (!result.success) {
-    const messages = result.error.errors
+    const messages = result.error.issues
       .map((e) => `  ${e.path.join('.')}: ${e.message}`)
       .join('\n')
     throw new Error(`Invalid environment configuration:\n${messages}`)

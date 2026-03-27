@@ -340,6 +340,43 @@ impl NiffyInsure {
         admin::drain(&env, recipient, amount);
     }
 
+    /// Emergency token sweep: recover mistakenly sent tokens with strict ethical constraints.
+    ///
+    /// # Security & Ethics
+    /// - Admin-only (requires multisig in production)
+    /// - Asset must be allowlisted
+    /// - Optional per-transaction cap
+    /// - Protected balance check (won't violate approved claims)
+    /// - Comprehensive audit trail
+    ///
+    /// # Parameters
+    /// - `asset`: Token contract address (must be allowlisted)
+    /// - `recipient`: Destination for swept tokens
+    /// - `amount`: Amount to sweep (must be > 0)
+    /// - `reason_code`: Audit code (1=accidental transfer, 2=test tokens, 3=airdrop, etc.)
+    ///
+    /// See SWEEP_RUNBOOK.md for operational guidance and legal requirements.
+    pub fn sweep_token(
+        env: Env,
+        asset: Address,
+        recipient: Address,
+        amount: i128,
+        reason_code: u32,
+    ) {
+        admin::sweep_token(&env, asset, recipient, amount, reason_code);
+    }
+
+    /// Set optional per-transaction cap for sweep operations.
+    /// Pass None to disable cap. Admin-only.
+    pub fn set_sweep_cap(env: Env, cap: Option<i128>) {
+        admin::set_sweep_cap(&env, cap);
+    }
+
+    /// Get current sweep cap (None if not set).
+    pub fn get_sweep_cap(env: Env) -> Option<i128> {
+        storage::get_sweep_cap(&env)
+    }
+
     // ═════════════════════════════════════════════════════════════════════════════
     // PAUSE SYSTEM
     //

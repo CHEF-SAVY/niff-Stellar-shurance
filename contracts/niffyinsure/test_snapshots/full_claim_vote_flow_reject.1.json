@@ -176,6 +176,46 @@
                     },
                     {
                       "key": {
+                        "symbol": "appeal_approve_votes"
+                      },
+                      "val": {
+                        "u32": 0
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "appeal_deadline_ledger"
+                      },
+                      "val": {
+                        "u32": 0
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "appeal_open_deadline_ledger"
+                      },
+                      "val": {
+                        "u32": 51840
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "appeal_reject_votes"
+                      },
+                      "val": {
+                        "u32": 0
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "appeals_count"
+                      },
+                      "val": {
+                        "u32": 0
+                      }
+                    },
+                    {
+                      "key": {
                         "symbol": "approve_votes"
                       },
                       "val": {
