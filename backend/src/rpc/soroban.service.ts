@@ -10,8 +10,10 @@ import {
   Logger,
   BadRequestException,
   ServiceUnavailableException,
+  Optional,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { MetricsService } from '../metrics/metrics.service';
 import {
   Account,
   BASE_FEE,
@@ -56,7 +58,44 @@ export interface BuildTransactionResult {
 export class SorobanService {
   private readonly logger = new Logger(SorobanService.name);
 
-  constructor(private readonly configService: ConfigService) {}
+  constructor(
+    private readonly configService: ConfigService,
+    @Optional() private readonly metricsService?: MetricsService,
+  ) {}
+
+  /**
+   * Wraps an RPC call with timing + metric recording.
+   * rpcMethod must be one of a fixed set to keep cardinality bounded.
+   */
+  private async trackRpc<T>(
+    rpcMethod: string,
+    fn: () => Promise<T>,
+  ): Promise<T> {
+    const start = Date.now();
+    try {
+      const result = await fn();
+      this.metricsService?.recordRpcCall({
+        rpcMethod,
+        status: 'success',
+        durationMs: Date.now() - start,
+      });
+      return result;
+    } catch (err: unknown) {
+      const errorType =
+        err instanceof BadRequestException
+          ? 'client_error'
+          : err instanceof ServiceUnavailableException
+            ? 'unavailable'
+            : 'unknown';
+      this.metricsService?.recordRpcCall({
+        rpcMethod,
+        status: 'error',
+        durationMs: Date.now() - start,
+        errorType,
+      });
+      throw err;
+    }
+  }
 
   private get rpcUrl(): string {
     return this.configService.get<string>(
@@ -163,6 +202,18 @@ export class SorobanService {
     riskScore: number;
     sourceAccount: string;
   }): Promise<SimulatePremiumResult> {
+    return this.trackRpc('simulate_generate_premium', () =>
+      this._simulateGeneratePremium(args),
+    );
+  }
+
+  private async _simulateGeneratePremium(args: {
+    policyType: PolicyTypeEnum;
+    region: RegionTierEnum;
+    age: number;
+    riskScore: number;
+    sourceAccount: string;
+  }): Promise<SimulatePremiumResult> {
     const scArgs = [
       SorobanService.enumVariantToScVal(args.policyType),
       SorobanService.enumVariantToScVal(args.region),
@@ -220,6 +271,22 @@ export class SorobanService {
    * entries before submission. Display these before the wallet popup.
    */
   async buildInitiatePolicyTransaction(args: {
+    holder: string;
+    policyType: PolicyTypeEnum;
+    region: RegionTierEnum;
+    coverage: bigint;
+    age: number;
+    riskScore: number;
+    asset?: string;
+    startLedger?: number;
+    durationLedgers?: number;
+  }): Promise<BuildTransactionResult> {
+    return this.trackRpc('build_initiate_policy', () =>
+      this._buildInitiatePolicyTransaction(args),
+    );
+  }
+
+  private async _buildInitiatePolicyTransaction(args: {
     holder: string;
     policyType: PolicyTypeEnum;
     region: RegionTierEnum;
@@ -323,6 +390,18 @@ export class SorobanService {
     details: string;
     imageUrls: string[];
   }): Promise<BuildTransactionResult> {
+    return this.trackRpc('build_file_claim', () =>
+      this._buildFileClaimTransaction(args),
+    );
+  }
+
+  private async _buildFileClaimTransaction(args: {
+    holder: string;
+    policyId: number;
+    amount: bigint;
+    details: string;
+    imageUrls: string[];
+  }): Promise<BuildTransactionResult> {
     const server = this.makeServer();
     const account = await this.loadAccount(server, args.holder);
     const ledgerInfo = await server.getLatestLedger();
@@ -401,34 +480,36 @@ export class SorobanService {
    * Expects base64-encoded XDR (envelope).
    */
   async submitTransaction(transactionXdr: string): Promise<SorobanRpc.Api.SendTransactionResponse> {
-    const server = this.makeServer();
-    const tx = TransactionBuilder.fromXDR(transactionXdr, this.networkPassphrase);
-    
-    try {
-      const response = await server.sendTransaction(tx);
-      if (response.status === 'ERROR') {
-        throw new BadRequestException({
-          code: 'TRANSACTION_REJECTED',
-          message: 'The transaction was rejected by the network.',
-          details: response.errorResult,
+    return this.trackRpc('send_transaction', async () => {
+      const server = this.makeServer();
+      const tx = TransactionBuilder.fromXDR(transactionXdr, this.networkPassphrase);
+      try {
+        const response = await server.sendTransaction(tx);
+        if (response.status === 'ERROR') {
+          throw new BadRequestException({
+            code: 'TRANSACTION_REJECTED',
+            message: 'The transaction was rejected by the network.',
+            details: response.errorResult,
+          });
+        }
+        return response;
+      } catch (err) {
+        this.logger.error('Transaction submission error', err);
+        throw new ServiceUnavailableException({
+          code: 'SUBMISSION_FAILED',
+          message: 'Failed to submit transaction to the network.',
         });
       }
-      return response;
-    } catch (err) {
-      this.logger.error('Transaction submission error', err);
-      throw new ServiceUnavailableException({
-        code: 'SUBMISSION_FAILED',
-        message: 'Failed to submit transaction to the network.',
-      });
-    }
+    });
   }
 
   /**
    * Fetch events for the configured contract ID within a ledger range.
    */
   async getEvents(startLedger: number, limit = 50): Promise<SorobanRpc.Api.GetEventsResponse> {
-    const server = this.makeServer();
-    return await server.getEvents({
+    return this.trackRpc('get_events', async () => {
+      const server = this.makeServer();
+      return server.getEvents({
       startLedger,
       filters: [
         {
@@ -437,6 +518,7 @@ export class SorobanService {
         },
       ],
       limit,
+      });
     });
   }
 
@@ -444,9 +526,11 @@ export class SorobanService {
    * Fetch the latest ledger sequence from the network.
    */
   async getLatestLedger(): Promise<number> {
-    const server = this.makeServer();
-    const info = await server.getLatestLedger();
-    return info.sequence;
+    return this.trackRpc('get_latest_ledger', async () => {
+      const server = this.makeServer();
+      const info = await server.getLatestLedger();
+      return info.sequence;
+    });
   }
 
   /**

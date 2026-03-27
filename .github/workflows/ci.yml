@@ -70,18 +70,6 @@ jobs:
       run:
         working-directory: backend
 
-    services:
-      redis:
-        image: redis:7-alpine
-        ports:
-          - 6379:6379
-        options: >-
-          --health-cmd "redis-cli ping"
-          --health-interval 5s
-          --health-timeout 3s
-          --health-retries 5
-          --health-start-period 5s
-
     env:
       REDIS_HOST: 127.0.0.1
       REDIS_PORT: 6379
@@ -89,6 +77,14 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+
+      # Install Redis directly on the runner — avoids Docker Hub rate limits entirely
+      - name: Start Redis
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y redis-server
+          sudo systemctl start redis-server
+          redis-cli ping
 
       - uses: actions/setup-node@v4
         with:
