@@ -61,6 +61,18 @@ const envSchema = z.object({
 
   /** Captcha provider */
   NEXT_PUBLIC_CAPTCHA_PROVIDER: z.enum(['turnstile', 'hcaptcha']).default('turnstile'),
+
+  /** Enable the on-ramp button (feature flag) */
+  NEXT_PUBLIC_RAMP_ENABLED: z
+    .string()
+    .transform((v) => v === 'true')
+    .default('false'),
+
+  /** Whether to emit anonymized click analytics for the ramp button */
+  NEXT_PUBLIC_RAMP_ANALYTICS: z
+    .string()
+    .transform((v) => v === 'true')
+    .default('false'),
 })
 
 type Env = z.infer<typeof envSchema>
@@ -75,6 +87,8 @@ function parseEnv(): Env {
     NEXT_PUBLIC_NETWORK: process.env.NEXT_PUBLIC_NETWORK,
     NEXT_PUBLIC_CAPTCHA_SITE_KEY: process.env.NEXT_PUBLIC_CAPTCHA_SITE_KEY,
     NEXT_PUBLIC_CAPTCHA_PROVIDER: process.env.NEXT_PUBLIC_CAPTCHA_PROVIDER,
+    NEXT_PUBLIC_RAMP_ENABLED: process.env.NEXT_PUBLIC_RAMP_ENABLED,
+    NEXT_PUBLIC_RAMP_ANALYTICS: process.env.NEXT_PUBLIC_RAMP_ANALYTICS,
   })
 
   if (!result.success) {
@@ -133,6 +147,12 @@ export function getConfig() {
 
     /** Captcha provider */
     captchaProvider: env.NEXT_PUBLIC_CAPTCHA_PROVIDER,
+
+    /** Whether the on-ramp button is enabled */
+    rampEnabled: env.NEXT_PUBLIC_RAMP_ENABLED,
+
+    /** Whether to emit anonymized ramp click analytics */
+    rampAnalytics: env.NEXT_PUBLIC_RAMP_ANALYTICS,
 
     /** Stellar block explorer base URL for the active network */
     explorerBase:

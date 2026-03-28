@@ -334,6 +334,11 @@ export const openapiSpec = {
           status: { type: "string", enum: ["Processing", "Approved", "Rejected"] },
           approve_votes: { type: "integer", example: 3 },
           reject_votes: { type: "integer", example: 1 },
+          voting_deadline_ledger: {
+            type: "integer",
+            description: "Last inclusive ledger for voting; frozen at filing.",
+            example: 1_250_000,
+          },
           _link: { type: "string", example: "/claims/42" },
         },
       },

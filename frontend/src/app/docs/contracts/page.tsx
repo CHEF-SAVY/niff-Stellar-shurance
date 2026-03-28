@@ -1,5 +1,5 @@
-import { loadMdx } from '@/lib/load-mdx'
 import { ContractTable } from '@/components/docs/contract-table'
+import { loadMdx } from '@/lib/load-mdx'
 
 export const metadata = { title: 'Contract Addresses — NiffyInsur Docs' }
 

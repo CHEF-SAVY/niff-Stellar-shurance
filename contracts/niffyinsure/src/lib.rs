@@ -4,6 +4,8 @@
 pub mod admin;
 mod calculator;
 mod claim;
+pub mod events;
+mod governance_token;
 mod ledger;
 mod policy;
 mod policy_lifecycle;
@@ -40,6 +42,13 @@ struct AllowedAssetUpdated {
     pub allowed: bool,
 }
 
+#[contractevent(topics = ["niffyinsure", "voting_duration_updated"])]
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct VotingDurationUpdated {
+    pub old_ledgers: u32,
+    pub new_ledgers: u32,
+}
+
 #[contractevent(topics = ["niffyinsure", "pause_toggled"])]
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct PauseToggled {
@@ -65,6 +74,7 @@ impl NiffyInsure {
         storage::set_token(&env, &token);
         storage::set_multiplier_table(&env, &premium::default_multiplier_table(&env));
         storage::set_allowed_asset(&env, &token, true);
+        storage::set_voting_duration_ledgers(&env, ledger::VOTE_WINDOW_LEDGERS);
         Ok(())
     }
 
@@ -135,6 +145,7 @@ impl NiffyInsure {
             40 => validate::Error::VotingWindowStillOpen,
             41 => validate::Error::NotEligibleVoter,
             42 => validate::Error::RateLimitExceeded,
+            49 => validate::Error::VotingDurationOutOfBounds,
             _ => validate::Error::ClaimNotApproved,
         };
         policy::map_quote_error(&env, err)
@@ -175,35 +186,6 @@ impl NiffyInsure {
         claim::get_claim(&env, claim_id)
     }
 
-    pub fn file_claim(
-        env: Env,
-        holder: Address,
-        policy_id: u32,
-        amount: i128,
-        details: soroban_sdk::String,
-        image_urls: Vec<soroban_sdk::String>,
-    ) -> u64 {
-        holder.require_auth();
-        claim::file_claim(&env, &holder, policy_id, amount, &details, &image_urls)
-            .unwrap_or_else(|e| panic_with_error!(&env, e))
-    }
-
-    pub fn vote_on_claim(
-        env: Env,
-        voter: Address,
-        claim_id: u64,
-        vote: types::VoteOption,
-    ) -> types::ClaimStatus {
-        voter.require_auth();
-        claim::vote_on_claim(&env, &voter, claim_id, &vote)
-            .unwrap_or_else(|e| panic_with_error!(&env, e))
-    }
-
-    pub fn finalize_claim(env: Env, claim_id: u64) -> types::ClaimStatus {
-        claim::finalize_claim(&env, claim_id)
-            .unwrap_or_else(|e| panic_with_error!(&env, e))
-    }
-
     pub fn get_claim_counter(env: Env) -> u64 {
         storage::get_claim_counter(&env)
     }
@@ -236,6 +218,7 @@ impl NiffyInsure {
                     amount: c.amount,
                     status: c.status,
                     filed_at: c.filed_at,
+                    voting_deadline_ledger: c.voting_deadline_ledger,
                 });
             }
             id = id.saturating_add(1);
@@ -577,6 +560,36 @@ impl NiffyInsure {
     /// Get detailed pause flags (bind_paused, claims_paused).
     pub fn get_pause_flags(env: Env) -> storage::PauseFlags {
         storage::get_pause_flags(&env)
+    }
+}
+
+/// Governance token: reserved entrypoints only when built with `--features governance-token`.
+/// No mint/transfer/balance logic — see `governance_token` module TODO.
+#[cfg(feature = "governance-token")]
+#[contractimpl]
+impl NiffyInsure {
+    pub fn gov_token_runtime_enabled(env: Env) -> bool {
+        governance_token::governance_token_effective_enabled(&env)
+    }
+
+    pub fn gov_set_token_runtime_enabled(env: Env, admin: Address, enabled: bool) {
+        admin.require_auth();
+        let stored = storage::get_admin(&env);
+        assert!(admin == stored, "only admin");
+        storage::bump_instance(&env);
+        governance_token::set_governance_token_runtime_enabled(&env, enabled);
+    }
+
+    pub fn gov_token_address(env: Env) -> Option<Address> {
+        governance_token::get_governance_token_address(&env)
+    }
+
+    pub fn gov_set_token_address_stub(env: Env, admin: Address, token: Address) {
+        admin.require_auth();
+        let stored = storage::get_admin(&env);
+        assert!(admin == stored, "only admin");
+        storage::bump_instance(&env);
+        governance_token::set_governance_token_address(&env, &token);
     }
 }
 

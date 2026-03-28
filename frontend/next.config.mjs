@@ -1,8 +1,25 @@
 import bundleAnalyzer from '@next/bundle-analyzer'
+import createNextIntlPlugin from 'next-intl/plugin'
 
+const withNextIntl = createNextIntlPlugin('./src/i18n/request.ts')
 const withBundleAnalyzer = bundleAnalyzer({
   enabled: process.env.ANALYZE === 'true',
 })
+
+// ---------------------------------------------------------------------------
+// Build-time guard: warn if known secret-pattern env vars are present.
+// Actual enforcement is via `import '@/lib/server-guard'` in server modules.
+// ---------------------------------------------------------------------------
+const SECRET_PATTERNS = /SECRET|PRIVATE_KEY|API_KEY|PASSWORD|TOKEN/i
+const leakedSecrets = Object.keys(process.env).filter(
+  (key) => !key.startsWith('NEXT_PUBLIC_') && SECRET_PATTERNS.test(key)
+)
+if (leakedSecrets.length > 0) {
+  console.warn(
+    '[next.config] Potential secret env vars detected — ensure these are NOT imported in Client Components:',
+    leakedSecrets
+  )
+}
 
 // ---------------------------------------------------------------------------
 // Content Security Policy
@@ -160,4 +177,4 @@ const nextConfig = {
   },
 }
 
-export default withBundleAnalyzer(nextConfig)
+export default withBundleAnalyzer(withNextIntl(nextConfig))

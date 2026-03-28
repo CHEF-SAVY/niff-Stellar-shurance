@@ -4,8 +4,9 @@
 // Requirements: 10.1, 10.2, 10.3
 
 import { useEffect, useRef } from "react";
-import type { ClaimBoard } from "@/lib/schemas/claims-board";
+
 import type { ClaimFilters } from "@/components/claims/types";
+import type { ClaimBoard } from "@/lib/schemas/claims-board";
 
 export interface NotificationPrefs {
   enabled: boolean;

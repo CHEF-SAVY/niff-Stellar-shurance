@@ -185,8 +185,8 @@ pub fn map_quote_error(env: &Env, err: Error) -> QuoteFailure {
         Error::ClaimNotRejected => "claim is not in rejected status; cannot open appeal",
         Error::AppealNotOpen => "no appeal is currently open",
         Error::AppealWindowStillOpen => "appeal voting window is still open; cannot finalize yet",
-        Error::PolicyBatchTooLarge => {
-            "get_policies_batch: too many keys (max 20 per call); split into smaller batches"
+        Error::VotingDurationOutOfBounds => {
+            "voting duration ledgers outside allowed min/max; see contract docs"
         }
     };
     QuoteFailure {

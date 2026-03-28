@@ -1,4 +1,5 @@
 import { Suspense } from 'react'
+
 import { PolicyInitiation } from '@/components/policy/policy-initiation'
 import { Skeleton } from '@/components/ui/skeleton'
 

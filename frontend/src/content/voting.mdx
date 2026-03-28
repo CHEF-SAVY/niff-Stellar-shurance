@@ -14,7 +14,7 @@ A wallet becomes a **voter** automatically when it holds an active policy. Voter
 Claim filed
      │
      ▼
-Voting window opens (configurable, default 72 h)
+Voting window opens (per-claim deadline = `filed_at + voting_duration_ledgers`, default ~7 days)
      │
      ├─ Voter calls vote(claim_id, Approve | Reject)
      │   └─ Duplicate votes are rejected on-chain
@@ -25,6 +25,10 @@ Quorum reached OR window expires
      ├─ Majority Approve → payout released
      └─ Majority Reject  → claim closed, no payout
 ```
+
+## Voting window configuration
+
+The contract keeps **`voting_duration_ledgers`** in instance storage (admin-set, bounded by on-chain min/max documented in `ledger.rs`). At each **`file_claim`**, the claim records **`voting_deadline_ledger`** = filing ledger + that duration. Votes are accepted through that ledger **inclusive**; the next ledger is too late. Admin updates apply only to **new** filings — existing claims keep their stored deadline (immutability for voters).
 
 ## Rules
 

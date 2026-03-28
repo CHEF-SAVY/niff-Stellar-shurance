@@ -1,0 +1,21 @@
+{
+  "filing": {
+    "title": "Presentar Reclamación",
+    "description": "Envía evidencia para tu reclamación de seguro.",
+    "policyId": "ID de Póliza",
+    "amount": "Monto de Reclamación (XLM)",
+    "details": "Detalles del Incidente",
+    "submit": "Enviar Reclamación"
+  },
+  "status": {
+    "pending": "En Revisión",
+    "approved": "Aprobada",
+    "rejected": "Rechazada",
+    "paid": "Pagada"
+  },
+  "updates": {
+    "submitted": "Reclamación enviada exitosamente.",
+    "underReview": "Tu reclamación está siendo revisada por el DAO.",
+    "payoutSent": "Se han enviado {amount} XLM a tu billetera."
+  }
+}

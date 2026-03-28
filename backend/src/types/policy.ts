@@ -46,4 +46,7 @@ export interface Claim {
   status: ClaimStatus;
   approve_votes: number;
   reject_votes: number;
+  /** Last ledger inclusive for voting; frozen at claim filing (matches contract). */
+  voting_deadline_ledger?: number;
+  filed_at_ledger?: number;
 }

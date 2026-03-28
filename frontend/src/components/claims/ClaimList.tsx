@@ -4,8 +4,10 @@
 // Requirements: 7.1, 7.2
 
 import { useState, useRef, useCallback } from "react";
-import { ClaimRow } from "./ClaimRow";
+
 import type { ClaimBoard } from "@/lib/schemas/claims-board";
+
+import { ClaimRow } from "./ClaimRow";
 
 const ROW_HEIGHT_PX = 120;
 const OVERSCAN = 3;
@@ -15,6 +17,8 @@ interface ClaimListProps {
   claims: ClaimBoard[];
   isAuthenticated: boolean;
   onVote?: (claimId: string, vote: "approve" | "reject" | "abstain") => void;
+  /** Latest closed ledger (Horizon) for on-chain voting deadline display */
+  currentLedger?: number | null;
   /** Enable windowed rendering to keep DOM node count bounded (Req 7.2) */
   virtualize?: boolean;
 }
@@ -32,6 +36,7 @@ export function ClaimList({
   claims,
   isAuthenticated,
   onVote,
+  currentLedger = null,
   virtualize = false,
 }: ClaimListProps) {
   const [scrollTop, setScrollTop] = useState(0);
@@ -90,6 +95,7 @@ export function ClaimList({
                 claim={claim}
                 isAuthenticated={isAuthenticated}
                 onVote={onVote}
+                currentLedger={currentLedger}
               />
             </div>
           ))}

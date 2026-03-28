@@ -35,9 +35,9 @@ pub const SAFETY_SCORE_MAX: u32 = 100;
 // See: https://developers.stellar.org/docs/learn/fundamentals/stellar-consensus-protocol
 pub use crate::ledger::{
     APPEAL_OPEN_WINDOW_LEDGERS, APPEAL_VOTE_WINDOW_LEDGERS, LEDGERS_PER_DAY, LEDGERS_PER_HOUR,
-    LEDGERS_PER_MIN, LEDGERS_PER_WEEK, MAX_APPEALS_PER_CLAIM, POLICY_DURATION_LEDGERS,
-    QUOTE_TTL_LEDGERS, RATE_LIMIT_WINDOW_LEDGERS, RENEWAL_WINDOW_LEDGERS, SECS_PER_LEDGER,
-    VOTE_WINDOW_LEDGERS,
+    LEDGERS_PER_MIN, LEDGERS_PER_WEEK, MAX_APPEALS_PER_CLAIM, MAX_VOTING_DURATION_LEDGERS,
+    MIN_VOTING_DURATION_LEDGERS, POLICY_DURATION_LEDGERS, QUOTE_TTL_LEDGERS,
+    RATE_LIMIT_WINDOW_LEDGERS, RENEWAL_WINDOW_LEDGERS, SECS_PER_LEDGER, VOTE_WINDOW_LEDGERS,
 };
 
 // ── Strike / rejection constants ──────────────────────────────────────────────
@@ -235,6 +235,8 @@ pub struct ClaimSummary {
     pub amount: i128,
     pub status: ClaimStatus,
     pub filed_at: u32,
+    /// Same field as `Claim::voting_deadline_ledger` — authoritative for UI / indexers.
+    pub voting_deadline_ledger: u32,
 }
 
 // ── Premium engine structs ────────────────────────────────────────────────────
@@ -316,8 +318,10 @@ pub struct Policy {
 
 /// On-chain claim record.
 ///
-/// `filed_at` is the ledger sequence at which the claim was filed.  It anchors
-/// the voting deadline: votes are accepted while `now < filed_at + VOTE_WINDOW_LEDGERS`.
+/// `filed_at` is the ledger sequence at which the claim was filed.
+/// `voting_deadline_ledger` is set at filing as `filed_at + voting_duration_ledgers`
+/// (using the instance config **at filing time**). Votes are accepted on ledgers
+/// `now <= voting_deadline_ledger` (inclusive); finalization requires `now > voting_deadline_ledger`.
 #[contracttype]
 #[derive(Clone)]
 pub struct Claim {

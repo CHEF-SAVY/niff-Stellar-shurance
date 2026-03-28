@@ -59,13 +59,20 @@ export function ledgersToMs(ledgers: number): number {
   return ledgers * SECS_PER_LEDGER * 1000
 }
 
-export function deadlineMs(filedAt: number, currentLedger: number): number {
-  const remaining = filedAt + VOTE_WINDOW_LEDGERS - currentLedger
-  return Math.max(0, remaining) * SECS_PER_LEDGER * 1000
+/**
+ * Approximate wall-clock ms remaining in the voting window, using the on-chain
+ * `voting_deadline_ledger` from the claim (not the live protocol config).
+ * Inclusive deadline: voting is allowed while `currentLedger <= votingDeadlineLedger`.
+ */
+export function deadlineMs(votingDeadlineLedger: number, currentLedger: number): number {
+  if (currentLedger > votingDeadlineLedger) return 0
+  const ledgersRemaining = votingDeadlineLedger - currentLedger + 1
+  return ledgersRemaining * SECS_PER_LEDGER * 1000
 }
 
-export function isVoteOpen(filedAt: number, currentLedger: number): boolean {
-  return currentLedger < filedAt + VOTE_WINDOW_LEDGERS
+/** Matches contract `is_claim_voting_open` — inclusive of `voting_deadline_ledger`. */
+export function isVoteOpen(votingDeadlineLedger: number, currentLedger: number): boolean {
+  return currentLedger <= votingDeadlineLedger
 }
 
 export function isTerminal(status: ClaimStatus): boolean {

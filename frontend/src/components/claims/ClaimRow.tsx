@@ -2,9 +2,10 @@
 
 // Feature: claims-board
 
-import { QuorumIndicator } from "./QuorumIndicator";
-import { DeadlineDisplay } from "./DeadlineDisplay";
 import type { ClaimBoard } from "@/lib/schemas/claims-board";
+
+import { DeadlineDisplay } from "./DeadlineDisplay";
+import { QuorumIndicator } from "./QuorumIndicator";
 
 // Requirements: 1.5, 8.1, 8.2, 8.3, 9.1, 9.3
 
@@ -14,6 +15,7 @@ export interface ClaimRowProps {
   claim: ClaimBoard;
   isAuthenticated: boolean;
   onVote?: (claimId: string, vote: "approve" | "reject" | "abstain") => void;
+  currentLedger?: number | null;
 }
 
 /** Maps ClaimStatus to a human-readable label and a shape indicator (non-color-only, Req 9.3) */
@@ -71,7 +73,12 @@ function isClaimOpen(claim: ClaimBoard): boolean {
  * - Minimum 44×44 CSS px touch targets (Req 8.3)
  * - Keyboard-reachable via Tab (Req 9.1)
  */
-export function ClaimRow({ claim, isAuthenticated, onVote }: ClaimRowProps) {
+export function ClaimRow({
+  claim,
+  isAuthenticated,
+  onVote,
+  currentLedger = null,
+}: ClaimRowProps) {
   const statusCfg = STATUS_CONFIG[claim.status] ?? DEFAULT_STATUS_CONFIG;
   const claimOpen = isClaimOpen(claim);
   const showVoteActions = isAuthenticated && claimOpen;
@@ -142,14 +149,12 @@ export function ClaimRow({ claim, isAuthenticated, onVote }: ClaimRowProps) {
 
       {/* ── Deadline display ───────────────────────────────────────── */}
       <div className="sm:w-44 shrink-0">
-        {claim.deadline_timestamp ? (
-          <DeadlineDisplay
-            deadlineTimestamp={claim.deadline_timestamp}
-            indexerLagSeconds={INDEXER_LAG_SECONDS}
-          />
-        ) : (
-          <span className="text-xs text-gray-400">No deadline set</span>
-        )}
+        <DeadlineDisplay
+          votingDeadlineLedger={claim.voting_deadline_ledger}
+          currentLedger={currentLedger}
+          deadlineTimestamp={claim.deadline_timestamp}
+          indexerLagSeconds={INDEXER_LAG_SECONDS}
+        />
       </div>
 
       {/* ── Vote action buttons ────────────────────────────────────── */}

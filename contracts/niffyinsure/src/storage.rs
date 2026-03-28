@@ -1,5 +1,6 @@
 use soroban_sdk::{contracttype, Address, Env, Vec};
 
+use crate::ledger;
 use crate::types::{Claim, MultiplierTable, Policy, VoteOption};
 
 // ── TTL constants ─────────────────────────────────────────────────────────────
@@ -29,6 +30,14 @@ pub enum DataKey {
     ActivePolicyCount(Address),
     /// Optional per-transaction cap for emergency sweep operations (i128).
     SweepCap,
+    // ── Reserved: future governance token (`governance_token` module) ────────
+    /// Runtime toggle: only meaningful when crate is built with `governance-token`.
+    /// Unset or `false` in MVP; no token logic runs unless feature + flag align.
+    GovernanceTokenRuntimeEnabled,
+    /// Future token contract address (stub storage only; no transfers in this crate yet).
+    GovernanceTokenAddress,
+    /// Future schema / migration version for governance-token config.
+    GovernanceTokenConfigVersion,
     // ── Persistent tier ──────────────────────────────────────────────────
     Policy(Address, u32),
     PolicyCounter(Address),
@@ -119,6 +128,23 @@ pub fn get_treasury(env: &Env) -> Address {
         .instance()
         .get(&DataKey::Treasury)
         .unwrap_or_else(|| env.current_contract_address())
+}
+
+// ── Governance: claim voting duration (instance) ─────────────────────────────
+
+pub fn set_voting_duration_ledgers(env: &Env, ledgers: u32) {
+    env.storage()
+        .instance()
+        .set(&DataKey::VoteDurLedgers, &ledgers);
+}
+
+/// Configured duration added at each `file_claim` to compute `voting_deadline_ledger`.
+/// Defaults to [`ledger::VOTE_WINDOW_LEDGERS`] when unset (pre-migration deployments).
+pub fn get_voting_duration_ledgers(env: &Env) -> u32 {
+    env.storage()
+        .instance()
+        .get(&DataKey::VoteDurLedgers)
+        .unwrap_or(ledger::VOTE_WINDOW_LEDGERS)
 }
 
 // ── External calculator address ───────────────────────────────────────────────

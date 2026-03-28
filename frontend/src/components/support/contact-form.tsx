@@ -1,15 +1,17 @@
 "use client";
 
+import { zodResolver } from "@hookform/resolvers/zod";
+import { Loader2, CheckCircle, AlertCircle } from "lucide-react";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Loader2, CheckCircle, AlertCircle } from "lucide-react";
+
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { CaptchaWidget } from "./captcha-widget";
 import { submitSupportTicket } from "@/lib/api/support";
+
+import { CaptchaWidget } from "./captcha-widget";
 
 const schema = z.object({
   email: z.string().email("Valid email required"),

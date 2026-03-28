@@ -34,6 +34,7 @@ fn dummy_claim(env: &Env, amount: i128, status: ClaimStatus) -> Claim {
         policy_id: 1,
         claimant: Address::generate(env),
         amount,
+        asset: Address::generate(env),
         details: String::from_str(env, "fire damage"),
         image_urls: vec![env],
         status,

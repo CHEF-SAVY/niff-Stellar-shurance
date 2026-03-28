@@ -1,12 +1,14 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import { AlertCircle, ArrowLeft } from 'lucide-react';
 import { useParams, useRouter } from 'next/navigation';
-import { PolicyAPI } from '@/lib/api/policy';
-import { Policy } from '@/lib/schemas/policy';
+import React, { useEffect, useState } from 'react';
+
 import { ClaimWizard } from '@/components/claims/ClaimWizard';
 import { Button, Card, CardContent, Skeleton } from '@/components/ui';
-import { AlertCircle, ArrowLeft } from 'lucide-react';
+import { PolicyAPI } from '@/lib/api/policy';
+import { Policy } from '@/lib/schemas/policy';
+
 
 export default function FileClaimPage() {
   const params = useParams();

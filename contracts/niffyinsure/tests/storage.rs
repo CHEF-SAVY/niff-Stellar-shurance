@@ -145,7 +145,7 @@ fn add_voter_and_remove_voter() {
 
 #[test]
 fn set_and_get_claim_round_trip() {
-    let (env, contract_id, _, _) = setup();
+    let (env, contract_id, _, token) = setup();
     let holder = Address::generate(&env);
 
     env.as_contract(&contract_id, || {
@@ -155,6 +155,7 @@ fn set_and_get_claim_round_trip() {
             policy_id: 1,
             claimant: holder.clone(),
             amount: 50_000_000,
+            asset: token.clone(),
             details: String::from_str(&env, "water damage"),
             image_urls: vec![&env],
             status: ClaimStatus::Processing,
@@ -423,13 +424,14 @@ fn list_policies_limit_clamped_to_page_size_max() {
 
 // ── pagination: list_claims ───────────────────────────────────────────────────
 
-fn make_claim(env: &Env, claim_id: u64, holder: &Address) -> niffyinsure::types::Claim {
+fn make_claim(env: &Env, claim_id: u64, holder: &Address, asset: &Address) -> niffyinsure::types::Claim {
     use niffyinsure::types::{Claim, ClaimStatus};
     Claim {
         claim_id,
         policy_id: 1,
         claimant: holder.clone(),
         amount: 10_000_000,
+        asset: asset.clone(),
         details: String::from_str(env, "test"),
         image_urls: vec![env],
         status: ClaimStatus::Processing,
@@ -455,13 +457,13 @@ fn list_claims_empty_when_none_filed() {
 
 #[test]
 fn list_claims_first_page() {
-    let (env, contract_id, _, _) = setup();
+    let (env, contract_id, _, token) = setup();
     let client = NiffyInsureClient::new(&env, &contract_id);
     let holder = Address::generate(&env);
 
     env.as_contract(&contract_id, || {
         for id in 1u64..=5 {
-            storage::set_claim(&env, &make_claim(&env, id, &holder));
+            storage::set_claim(&env, &make_claim(&env, id, &holder, &token));
             env.storage().instance().set(&storage::DataKey::ClaimCounter, &id);
         }
     });
@@ -474,13 +476,13 @@ fn list_claims_first_page() {
 
 #[test]
 fn list_claims_last_page_partial() {
-    let (env, contract_id, _, _) = setup();
+    let (env, contract_id, _, token) = setup();
     let client = NiffyInsureClient::new(&env, &contract_id);
     let holder = Address::generate(&env);
 
     env.as_contract(&contract_id, || {
         for id in 1u64..=5 {
-            storage::set_claim(&env, &make_claim(&env, id, &holder));
+            storage::set_claim(&env, &make_claim(&env, id, &holder, &token));
             env.storage().instance().set(&storage::DataKey::ClaimCounter, &id);
         }
     });
@@ -492,12 +494,12 @@ fn list_claims_last_page_partial() {
 
 #[test]
 fn list_claims_cursor_past_end_returns_empty() {
-    let (env, contract_id, _, _) = setup();
+    let (env, contract_id, _, token) = setup();
     let client = NiffyInsureClient::new(&env, &contract_id);
     let holder = Address::generate(&env);
 
     env.as_contract(&contract_id, || {
-        storage::set_claim(&env, &make_claim(&env, 1, &holder));
+        storage::set_claim(&env, &make_claim(&env, 1, &holder, &token));
         env.storage().instance().set(&storage::DataKey::ClaimCounter, &1u64);
     });
 
@@ -507,13 +509,13 @@ fn list_claims_cursor_past_end_returns_empty() {
 
 #[test]
 fn list_claims_oversize_request_clamped() {
-    let (env, contract_id, _, _) = setup();
+    let (env, contract_id, _, token) = setup();
     let client = NiffyInsureClient::new(&env, &contract_id);
     let holder = Address::generate(&env);
 
     env.as_contract(&contract_id, || {
         for id in 1u64..=25 {
-            storage::set_claim(&env, &make_claim(&env, id, &holder));
+            storage::set_claim(&env, &make_claim(&env, id, &holder, &token));
             env.storage().instance().set(&storage::DataKey::ClaimCounter, &id);
         }
     });

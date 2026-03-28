@@ -1,6 +1,8 @@
 import dynamic from 'next/dynamic'
+
 import { Hero } from '@/components/landing/hero'
 import { Skeleton } from '@/components/ui/skeleton'
+import { LandingTracker } from '@/components/landing/landing-tracker'
 
 const HowItWorks = dynamic(
   () => import('@/components/landing/how-it-works').then((m) => m.HowItWorks),
@@ -20,6 +22,7 @@ const CTA = dynamic(
 export default function Home() {
   return (
     <main>
+      <LandingTracker />
       <Hero />
       <HowItWorks />
       <Security />

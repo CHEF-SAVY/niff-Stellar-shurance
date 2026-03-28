@@ -1,3 +1,7 @@
+//! **Quarantined** (not built as a `tests/*.rs` target): expects legacy `niffyins` / `adm_paus`
+//! topics and an older Soroban `events().all()` shape. Update to current `#[contractevent]`
+//! topics (`niffyinsure`, `pause_toggled`, etc.) before moving back to `tests/events.rs`.
+//!
 //! Event shape regression tests.
 //!
 //! Each test asserts the exact topic layout and payload fields for a lifecycle

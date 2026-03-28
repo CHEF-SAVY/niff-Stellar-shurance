@@ -1,9 +1,10 @@
 'use client';
 
+import { X, Upload, FileText, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import React, { useState, useCallback } from 'react';
+
 import { Button, Progress, Label } from '@/components/ui';
 import { uploadFileWithProgress, UploadProgress } from '@/lib/ipfs-upload';
-import { X, Upload, FileText, AlertTriangle, CheckCircle2 } from 'lucide-react';
 
 interface FileUploadState {
   file: File;
