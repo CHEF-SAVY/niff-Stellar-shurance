@@ -1,5 +1,6 @@
 import { readFile } from 'fs/promises'
 import path from 'path'
+
 import { compileMDX } from 'next-mdx-remote/rsc'
 
 const CONTENT_DIR = path.join(process.cwd(), 'src', 'content')

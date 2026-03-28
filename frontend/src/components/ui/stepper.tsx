@@ -1,6 +1,7 @@
-import * as React from 'react'
-import { cn } from '@/lib/utils'
 import { Check, ChevronRight } from 'lucide-react'
+import * as React from 'react'
+
+import { cn } from '@/lib/utils'
 
 interface Step {
   id: string
@@ -14,20 +15,30 @@ interface StepperProps {
   currentStep: number
   onStepClick?: (stepIndex: number) => void
   className?: string
+  'aria-label'?: string
 }
 
-function Stepper({ steps, currentStep, onStepClick, className }: StepperProps) {
+function Stepper({ steps, currentStep, onStepClick, className, 'aria-label': ariaLabel }: StepperProps) {
   return (
-    <div className={cn('w-full', className)}>
-      <div className="flex items-center justify-between">
+    <nav
+      aria-label={ariaLabel ?? 'Progress steps'}
+      className={cn('w-full', className)}
+    >
+      <ol className="flex items-center justify-between" role="list">
         {steps.map((step, index) => (
           <React.Fragment key={step.id}>
-            <div className="flex items-center">
+            <li className="flex items-center">
               <button
                 onClick={() => onStepClick?.(index)}
                 disabled={step.status === 'pending'}
+                aria-current={step.status === 'active' ? 'step' : undefined}
+                aria-label={`Step ${index + 1}: ${step.title}${
+                  step.status === 'completed' ? ' (completed)' :
+                  step.status === 'active' ? ' (current)' :
+                  step.status === 'error' ? ' (error)' : ' (not started)'
+                }`}
                 className={cn(
-                  'relative flex items-center justify-center w-10 h-10 rounded-full border-2 transition-colors',
+                  'relative flex items-center justify-center w-10 h-10 rounded-full border-2 transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2',
                   step.status === 'completed'
                     ? 'bg-primary border-primary text-primary-foreground'
                     : step.status === 'active'
@@ -39,9 +50,9 @@ function Stepper({ steps, currentStep, onStepClick, className }: StepperProps) {
                 )}
               >
                 {step.status === 'completed' ? (
-                  <Check className="w-5 h-5" />
+                  <Check className="w-5 h-5" aria-hidden="true" />
                 ) : (
-                  <span className="text-sm font-medium">{index + 1}</span>
+                  <span className="text-sm font-medium" aria-hidden="true">{index + 1}</span>
                 )}
               </button>
               <div className="ml-4 text-left hidden sm:block">
@@ -56,18 +67,20 @@ function Stepper({ steps, currentStep, onStepClick, className }: StepperProps) {
                       ? 'text-destructive'
                       : 'text-muted-foreground'
                   )}
+                  aria-hidden="true"
                 >
                   {step.title}
                 </div>
                 {step.description && (
-                  <div className="text-xs text-muted-foreground mt-1">
+                  <div className="text-xs text-muted-foreground mt-1" aria-hidden="true">
                     {step.description}
                   </div>
                 )}
               </div>
-            </div>
+            </li>
             {index < steps.length - 1 && (
               <ChevronRight
+                aria-hidden="true"
                 className={cn(
                   'w-5 h-5 mx-2 flex-shrink-0',
                   index < currentStep ? 'text-primary' : 'text-muted-foreground'
@@ -76,8 +89,8 @@ function Stepper({ steps, currentStep, onStepClick, className }: StepperProps) {
             )}
           </React.Fragment>
         ))}
-      </div>
-    </div>
+      </ol>
+    </nav>
   )
 }
 

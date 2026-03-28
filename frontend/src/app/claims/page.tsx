@@ -3,6 +3,7 @@
 // Requirements: 1.1, 4.4
 
 import type { Metadata } from "next";
+
 import { ClaimsBoard } from "@/components/claims/ClaimsBoard";
 
 export const metadata: Metadata = {

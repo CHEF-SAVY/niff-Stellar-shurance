@@ -1,5 +1,6 @@
-import { IpfsUploadResponse } from '../types/claim';
 import { getConfig } from '@/config/env';
+
+import { IpfsUploadResponse } from '../types/claim';
 
 export interface UploadProgress {
   loaded: number;

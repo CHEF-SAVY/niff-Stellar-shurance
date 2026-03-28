@@ -1,5 +1,5 @@
-import { PolicyInitiationData, Transaction, Policy, PolicyError as PolicyErrorType } from '@/lib/schemas/policy'
 import { getConfig } from '@/config/env'
+import { PolicyInitiationData, Transaction, Policy, PolicyError as PolicyErrorType } from '@/lib/schemas/policy'
 
 const { apiUrl: API_BASE_URL, explorerBase: EXPLORER_BASE } = getConfig()
 

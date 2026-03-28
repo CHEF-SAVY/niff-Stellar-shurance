@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+
 import { getContracts, type Network } from '@/lib/network-manifest'
 
 export function ContractTable() {

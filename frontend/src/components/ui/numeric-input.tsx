@@ -1,9 +1,11 @@
 'use client'
 
 import * as React from 'react'
+
+import { cn } from '@/lib/utils'
+
 import { Input } from './input'
 import { Label } from './label'
-import { cn } from '@/lib/utils'
 
 interface NumericInputProps extends Omit<React.InputHTMLAttributes<HTMLInputElement>, 'type'> {
   label?: string

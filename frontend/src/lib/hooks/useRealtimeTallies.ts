@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import { z } from "zod";
+
 import type { TallyUpdate } from "@/components/claims/types";
 
 // Schema to validate untrusted SSE / polling payloads before use

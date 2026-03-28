@@ -1,3 +1,4 @@
+import { getConfig } from '@/config/env'
 import {
   Claim,
   ClaimSchema,
@@ -7,7 +8,6 @@ import {
   VoteResponse,
   VoteResponseSchema,
 } from '@/lib/schemas/vote'
-import { getConfig } from '@/config/env'
 
 const { apiUrl: API_BASE, explorerBase: EXPLORER_BASE } = getConfig()
 
