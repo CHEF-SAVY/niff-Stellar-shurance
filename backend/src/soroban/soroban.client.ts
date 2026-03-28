@@ -31,6 +31,8 @@ type SimResult = SorobanRpc.Api.SimulateTransactionResponse;
 
 export type PolicyTypeEnum = 'Auto' | 'Health' | 'Property';
 export type RegionTierEnum = 'Low' | 'Medium' | 'High';
+export type AgeBandEnum = 'Young' | 'Adult' | 'Senior';
+export type CoverageTypeEnum = 'Basic' | 'Standard' | 'Premium';
 
 export interface SimulatePremiumResult {
   premiumStroops: string;
@@ -208,8 +210,8 @@ export async function simulateGeneratePremium(args: {
  * Build an unsigned `initiate_policy` transaction with simulation-derived
  * resource footprints.  Returns the base64 XDR for wallet signing.
  *
- * Argument ordering: holder, policy_type, region, coverage, age, risk_score,
- *                    start_ledger, end_ledger
+ * Argument ordering matches on-chain initiate_policy: holder, policy_type, region,
+ * age_band, coverage_type, safety_score, base_amount, asset, beneficiary.
  *
  * Multisig: `authRequirements` lists all addresses that must sign the Soroban
  * auth entries before submission. Display these to the user before the wallet popup.
@@ -221,33 +223,39 @@ export async function buildInitiatePolicyTransaction(args: {
   holder: string;
   policyType: PolicyTypeEnum;
   region: RegionTierEnum;
-  coverage: bigint;
-  age: number;
-  riskScore: number;
+  ageBand: AgeBandEnum;
+  coverageType: CoverageTypeEnum;
+  safetyScore: number;
+  baseAmount: bigint;
   asset?: string;
-  startLedger?: number;
-  durationLedgers?: number;
+  beneficiary?: string;
 }): Promise<BuildTransactionResult> {
   const server = makeServer();
   const account = await loadAccount(server, args.holder);
 
   const ledgerInfo = await server.getLatestLedger();
-  const startLedger = args.startLedger ?? ledgerInfo.sequence;
-  const endLedger = startLedger + (args.durationLedgers ?? 1_051_200);
 
   // Resolve asset: use caller-supplied address or fall back to configured default.
   const assetAddress = args.asset ?? process.env.DEFAULT_TOKEN_CONTRACT_ID ?? '';
+
+  const beneficiaryScv =
+    args.beneficiary == null || args.beneficiary === ''
+      ? nativeToScVal(null)
+      : nativeToScVal(new Address(args.beneficiary), {
+          type: 'option',
+          innerType: 'address',
+        } as { type: string; innerType: string });
 
   const scArgs = [
     new Address(args.holder).toScVal(),
     enumVariantToScVal(args.policyType),
     enumVariantToScVal(args.region),
-    nativeToScVal(args.coverage, { type: 'i128' }),
-    nativeToScVal(args.age, { type: 'u32' }),
-    nativeToScVal(args.riskScore, { type: 'u32' }),
-    nativeToScVal(startLedger, { type: 'u32' }),
-    nativeToScVal(endLedger, { type: 'u32' }),
+    enumVariantToScVal(args.ageBand),
+    enumVariantToScVal(args.coverageType),
+    nativeToScVal(args.safetyScore, { type: 'u32' }),
+    nativeToScVal(args.baseAmount, { type: 'i128' }),
     new Address(assetAddress).toScVal(),
+    beneficiaryScv,
   ];
 
   const contract = new Contract(config.stellar.contractId);

@@ -21,6 +21,7 @@ fn dummy_policy(env: &Env, start: u32, end: u32, coverage: i128, active: bool) -
         start_ledger: start,
         end_ledger: end,
         asset: Address::generate(env),
+        beneficiary: None,
         terminated_at_ledger: 0,
         termination_reason: TerminationReason::None,
         terminated_by_admin: false,
@@ -34,6 +35,7 @@ fn dummy_claim(env: &Env, amount: i128, status: ClaimStatus) -> Claim {
         policy_id: 1,
         claimant: Address::generate(env),
         amount,
+        asset: Address::generate(env),
         details: String::from_str(env, "fire damage"),
         image_urls: vec![env],
         status,
@@ -46,6 +48,7 @@ fn dummy_claim(env: &Env, amount: i128, status: ClaimStatus) -> Claim {
         appeal_deadline_ledger: 0,
         appeal_approve_votes: 0,
         appeal_reject_votes: 0,
+        status_history: soroban_sdk::Vec::new(env),
     }
 }
 

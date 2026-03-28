@@ -1,5 +1,6 @@
-import { DocsSidebar } from '@/components/docs/docs-sidebar'
 import Link from 'next/link'
+
+import { DocsSidebar } from '@/components/docs/docs-sidebar'
 
 const GIT_SHA = process.env.NEXT_PUBLIC_GIT_SHA ?? process.env.VERCEL_GIT_COMMIT_SHA ?? ''
 

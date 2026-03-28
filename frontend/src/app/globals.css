@@ -1,5 +1,34 @@
-@config "../../tailwind.config.js";
+@config "../../tailwind.config.ts";
 @import "tailwindcss";
+
+/*
+ * ============================================================
+ * Design Token Reference
+ * ============================================================
+ *
+ * SPACING (Tailwind scale, key values)
+ *   4   → 1rem   (16px)  — base unit
+ *   6   → 1.5rem (24px)  — section gap
+ *   8   → 2rem   (32px)  — card padding
+ *   18  → 4.5rem (72px)  — custom: sidebar header
+ *   88  → 22rem  (352px) — custom: sidebar width
+ *
+ * COLORS (HSL CSS variables — override in :root / .dark)
+ *   --primary            Stellar Azure Blue  (trust / brand)
+ *   --background         Page background
+ *   --foreground         Body text
+ *   --muted-foreground   Secondary / helper text
+ *   --border             Dividers, input borders
+ *
+ * INSURANCE DOMAIN COLORS (static HSL, defined in tailwind.config.ts)
+ *   success.DEFAULT      hsl(142 71% 45%)  — Paid / Active
+ *   warning.DEFAULT      hsl(38  92% 50%)  — Pending / Under review
+ *   error.DEFAULT        hsl(0   84% 60%)  — Expired / Rejected
+ *
+ * TYPOGRAPHY (policy document scale — see tailwind.config.ts)
+ *   policy-xs / policy-sm / policy-base / policy-lg / policy-xl
+ * ============================================================
+ */
 
 @layer base {
   :root {
@@ -120,5 +149,11 @@
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
+  }
+
+  /* Tailwind animate-spin is used on loading spinners — keep it visible but
+     instant so the element is still present for screen readers without motion */
+  .animate-spin {
+    animation: none !important;
   }
 }

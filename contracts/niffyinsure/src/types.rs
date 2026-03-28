@@ -35,9 +35,9 @@ pub const SAFETY_SCORE_MAX: u32 = 100;
 // See: https://developers.stellar.org/docs/learn/fundamentals/stellar-consensus-protocol
 pub use crate::ledger::{
     APPEAL_OPEN_WINDOW_LEDGERS, APPEAL_VOTE_WINDOW_LEDGERS, LEDGERS_PER_DAY, LEDGERS_PER_HOUR,
-    LEDGERS_PER_MIN, LEDGERS_PER_WEEK, MAX_APPEALS_PER_CLAIM, POLICY_DURATION_LEDGERS,
-    QUOTE_TTL_LEDGERS, RATE_LIMIT_WINDOW_LEDGERS, RENEWAL_WINDOW_LEDGERS, SECS_PER_LEDGER,
-    VOTE_WINDOW_LEDGERS,
+    LEDGERS_PER_MIN, LEDGERS_PER_WEEK, MAX_APPEALS_PER_CLAIM, MAX_VOTING_DURATION_LEDGERS,
+    MIN_VOTING_DURATION_LEDGERS, POLICY_DURATION_LEDGERS, QUOTE_TTL_LEDGERS,
+    RATE_LIMIT_WINDOW_LEDGERS, RENEWAL_WINDOW_LEDGERS, SECS_PER_LEDGER, VOTE_WINDOW_LEDGERS,
 };
 
 // ── Strike / rejection constants ──────────────────────────────────────────────
@@ -134,6 +134,28 @@ impl ClaimStatus {
     }
 }
 
+/// One step in a claim's on-chain status timeline.
+///
+/// `ledger` is the Stellar ledger sequence when the claim entered `status`.
+/// Persisted on the claim so Next.js timelines can render the lifecycle without
+/// depending only on indexer events (which may be incomplete during reindex).
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ClaimStatusHistoryEntry {
+    pub status: ClaimStatus,
+    pub ledger: u32,
+}
+
+/// Maximum `(status, ledger)` pairs retained per claim.
+///
+/// When a new transition would exceed this, the **oldest** entry is dropped
+/// (FIFO) so claim storage cannot grow without bound (anti-griefing).
+///
+/// Sized above the documented main flow plus appeal rounds (`MAX_APPEALS_PER_CLAIM`
+/// in `ledger.rs`). If more transitions occur than this (e.g. future protocol
+/// changes), **`status_history` may omit early steps** — `status` remains canonical.
+pub const CLAIM_STATUS_HISTORY_MAX: u32 = 24;
+
 #[contracttype]
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub enum VoteOption {
@@ -192,6 +214,22 @@ pub enum TerminationReason {
 /// never panics or skips records.
 pub const PAGE_SIZE_MAX: u32 = 20;
 
+/// Maximum `(holder, policy_id)` pairs in a single `get_policies_batch` call.
+///
+/// Intentionally equals [`PAGE_SIZE_MAX`]: each lookup is a separate storage read, so
+/// allowing unbounded batches would risk instruction-meter exhaustion during RPC
+/// simulation and unfair resource use. Unlike `list_policies` (which silently clamps
+/// `limit`), an over-cap batch **reverts** so callers chunk explicitly.
+pub const POLICY_BATCH_GET_MAX: u32 = PAGE_SIZE_MAX;
+
+/// Key for batched policy reads (`get_policies_batch`).
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PolicyLookupKey {
+    pub holder: Address,
+    pub policy_id: u32,
+}
+
 /// Lightweight policy summary returned by `list_policies`.
 ///
 /// Omits large or rarely-needed fields (`details`, `image_urls`, etc.) to keep
@@ -219,6 +257,8 @@ pub struct ClaimSummary {
     pub amount: i128,
     pub status: ClaimStatus,
     pub filed_at: u32,
+    /// Same field as `Claim::voting_deadline_ledger` — authoritative for UI / indexers.
+    pub voting_deadline_ledger: u32,
 }
 
 // ── Premium engine structs ────────────────────────────────────────────────────
@@ -274,6 +314,13 @@ pub struct Policy {
     /// SEP-41 asset contract used for this policy's premium payment and claim payout.
     /// Must be allowlisted at the time of policy initiation.
     pub asset: Address,
+    /// Optional payout destination for approved claims. When unset (`None`), funds are sent to `holder`.
+    ///
+    /// **Phishing / social-engineering risk:** A malicious interface could trick the holder into
+    /// setting a beneficiary controlled by an attacker, diverting all claim proceeds. Holders must
+    /// verify the beneficiary address carefully (compare on a second channel, hardware wallet
+    /// screen, or multisig quorum) before signing `initiate_policy` or `set_beneficiary`.
+    pub beneficiary: Option<Address>,
     // Termination fields
     pub terminated_at_ledger: u32,
     pub termination_reason: TerminationReason,
@@ -300,8 +347,10 @@ pub struct Policy {
 
 /// On-chain claim record.
 ///
-/// `filed_at` is the ledger sequence at which the claim was filed.  It anchors
-/// the voting deadline: votes are accepted while `now < filed_at + VOTE_WINDOW_LEDGERS`.
+/// `filed_at` is the ledger sequence at which the claim was filed.
+/// `voting_deadline_ledger` is set at filing as `filed_at + voting_duration_ledgers`
+/// (using the instance config **at filing time**). Votes are accepted on ledgers
+/// `now <= voting_deadline_ledger` (inclusive); finalization requires `now > voting_deadline_ledger`.
 #[contracttype]
 #[derive(Clone)]
 pub struct Claim {
@@ -331,6 +380,10 @@ pub struct Claim {
     pub appeal_approve_votes: u32,
     /// Reject votes cast in the current appeal round.
     pub appeal_reject_votes: u32,
+    /// Append-only status timeline (oldest → newest). Capped at
+    /// [`CLAIM_STATUS_HISTORY_MAX`]; on overflow the oldest entries are removed.
+    /// May be incomplete if the cap is exceeded; `status` is authoritative.
+    pub status_history: Vec<ClaimStatusHistoryEntry>,
 }
 
 #[contracttype]

@@ -1,5 +1,8 @@
-import { Metadata } from "next";
 import { ExternalLink, MessageCircle, BookOpen } from "lucide-react";
+import { Metadata } from "next";
+
+import { ContactForm } from "@/components/support/contact-form";
+import { FaqAccordion } from "@/components/support/faq-accordion";
 import {
   Card,
   CardContent,
@@ -7,8 +10,6 @@ import {
   CardTitle,
   CardDescription,
 } from "@/components/ui/card";
-import { FaqAccordion } from "@/components/support/faq-accordion";
-import { ContactForm } from "@/components/support/contact-form";
 import { FAQ_ITEMS } from "@/lib/faq-data";
 
 export const metadata: Metadata = {

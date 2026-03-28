@@ -1,10 +1,11 @@
 'use client';
 
-import { useCallback, useRef, useState } from 'react';
 import { ChevronDown } from 'lucide-react';
-import { cn } from '@/lib/utils';
-import { FaqItem } from '@/lib/faq-data';
+import { useCallback, useRef, useState } from 'react';
+
 import { trackFaqExpansion } from '@/lib/api/support';
+import { FaqItem } from '@/lib/faq-data';
+import { cn } from '@/lib/utils';
 
 interface FaqAccordionProps {
   items: FaqItem[];

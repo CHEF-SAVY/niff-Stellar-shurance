@@ -1,7 +1,7 @@
 {
   "_meta": {
     "description": "Golden XDR argument vectors for critical Soroban contract invocations. These are the exact ScVal encodings the backend must produce before signing. Any change to argument order, type, or encoding MUST be intentional and accompanied by a contract semver bump and a PR updating this file.",
-    "contractSemver": "0.1.0",
+    "contractSemver": "0.2.0",
     "generatedBy": "scripts/refresh-vectors.ts",
     "note": "Never commit real private keys or mainnet account addresses here. Use placeholder G-addresses only."
   },
@@ -18,9 +18,10 @@
         { "pos": 4, "name": "coverage_type", "scvType": "scvVec",      "encoding": "AAAAEQAAAAEAAAAPAAAABUJhc2lj" },
         { "pos": 5, "name": "safety_score",  "scvType": "scvU32",      "encoding": "AAAAB3UAAABK" },
         { "pos": 6, "name": "base_amount",   "scvType": "scvI128",     "encoding": "AAAACQAAAAAAAAAAAAAAAO5rKAA=" },
-        { "pos": 7, "name": "asset",         "scvType": "scvAddress",  "encoding": "AAAAEgAAAAIAAAAA" }
+        { "pos": 7, "name": "asset",         "scvType": "scvAddress",  "encoding": "AAAAEgAAAAIAAAAA" },
+        { "pos": 8, "name": "beneficiary",   "scvType": "scvVoid",     "encoding": "AAAAAQ==" }
       ],
-      "argCount": 8,
+      "argCount": 9,
       "inputs": {
         "holder":        "GDVOEGATQV4FGUJKDEBEYT5NAPWJ55MEMJVLC5TU7Y74WD73PPAS4TYW",
         "policy_type":   "Auto",
@@ -29,7 +30,8 @@
         "coverage_type": "Basic",
         "safety_score":  74,
         "base_amount":   "1000000000",
-        "asset":         "CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC"
+        "asset":         "CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC",
+        "beneficiary":   null
       }
     },
     {
@@ -44,9 +46,10 @@
         { "pos": 4, "name": "coverage_type", "scvType": "scvVec",      "encoding": "AAAAEQAAAAEAAAAPAAAACFByZW1pdW0=" },
         { "pos": 5, "name": "safety_score",  "scvType": "scvU32",      "encoding": "AAAAB3UAAAAB" },
         { "pos": 6, "name": "base_amount",   "scvType": "scvI128",     "encoding": "AAAACQAAAAAAAAAAAAAABN+AAAA=" },
-        { "pos": 7, "name": "asset",         "scvType": "scvAddress",  "encoding": "AAAAEgAAAAIAAAAA" }
+        { "pos": 7, "name": "asset",         "scvType": "scvAddress",  "encoding": "AAAAEgAAAAIAAAAA" },
+        { "pos": 8, "name": "beneficiary",   "scvType": "scvVoid",     "encoding": "AAAAAQ==" }
       ],
-      "argCount": 8,
+      "argCount": 9,
       "inputs": {
         "holder":        "GDVOEGATQV4FGUJKDEBEYT5NAPWJ55MEMJVLC5TU7Y74WD73PPAS4TYW",
         "policy_type":   "Health",
@@ -55,7 +58,8 @@
         "coverage_type": "Premium",
         "safety_score":  1,
         "base_amount":   "5000000000",
-        "asset":         "CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC"
+        "asset":         "CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC",
+        "beneficiary":   null
       }
     },
     {
@@ -119,10 +123,10 @@
   "negativeVectors": [
     {
       "id": "initiate_policy__wrong_arg_count",
-      "description": "Builder must reject calls with fewer than 8 args",
+      "description": "Builder must reject calls with fewer than 9 args",
       "function": "initiate_policy",
       "expectError": "ARG_COUNT_MISMATCH",
-      "badArgCount": 7
+      "badArgCount": 8
     },
     {
       "id": "initiate_policy__enum_wrong_type",

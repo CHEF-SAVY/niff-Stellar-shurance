@@ -1,5 +1,8 @@
 'use client'
 
+import { AlertTriangle } from 'lucide-react'
+
+import { Button } from '@/components/ui/button'
 import {
   Dialog,
   DialogContent,
@@ -8,9 +11,8 @@ import {
   DialogDescription,
   DialogFooter,
 } from '@/components/ui/dialog'
-import { Button } from '@/components/ui/button'
 import { VoteOption } from '@/lib/schemas/vote'
-import { AlertTriangle } from 'lucide-react'
+
 
 interface VoteConfirmModalProps {
   open: boolean

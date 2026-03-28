@@ -1,0 +1,22 @@
+{
+  "quote": {
+    "title": "Get Insurance Quote",
+    "subtitle": "Calculate your premium for smart contract insurance coverage on the Stellar network.",
+    "howItWorks": "How It Works",
+    "step1Title": "1. Provide Details",
+    "step1Desc": "Enter your contract address, coverage amount, and risk factors.",
+    "step2Title": "2. Get Quote",
+    "step2Desc": "Our algorithm calculates your premium based on risk assessment.",
+    "step3Title": "3. Purchase Policy",
+    "step3Desc": "Accept the quote and pay the premium to activate coverage."
+  },
+  "coverage": {
+    "premium": "Premium",
+    "premiumAmount": "Premium: {amount} XLM",
+    "coverageAmount": "Coverage Amount",
+    "expiry": "Policy Expires",
+    "active": "Active",
+    "expired": "Expired",
+    "pending": "Pending"
+  }
+}

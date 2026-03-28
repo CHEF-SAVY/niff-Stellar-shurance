@@ -8,6 +8,29 @@ import {
 } from '@nestjs/common';
 import { Request, Response } from 'express';
 
+/**
+ * Maps Stellar / Soroban error strings to stable API error codes.
+ * Keeps raw blockchain internals out of client-facing responses.
+ */
+const STELLAR_ERROR_MAP: Record<string, string> = {
+  tx_failed: 'TRANSACTION_FAILED',
+  tx_bad_auth: 'SIGNATURE_INVALID',
+  tx_insufficient_fee: 'INSUFFICIENT_FEE',
+  tx_no_account: 'INVALID_WALLET_ADDRESS',
+  op_no_trust: 'TRANSACTION_FAILED',
+  op_underfunded: 'INSUFFICIENT_BALANCE',
+  ledgerClosed: 'LEDGER_CLOSED',
+  timeout: 'TIMEOUT_ERROR',
+};
+
+function normalizeStellarError(raw: string): string | undefined {
+  const lower = raw.toLowerCase();
+  for (const [key, code] of Object.entries(STELLAR_ERROR_MAP)) {
+    if (lower.includes(key.toLowerCase())) return code;
+  }
+  return undefined;
+}
+
 @Catch()
 export class HttpExceptionFilter implements ExceptionFilter {
   private readonly logger = new Logger(HttpExceptionFilter.name);
@@ -22,10 +45,16 @@ export class HttpExceptionFilter implements ExceptionFilter {
         ? exception.getStatus()
         : HttpStatus.INTERNAL_SERVER_ERROR;
 
-    const message =
+    const rawResponse =
       exception instanceof HttpException
         ? exception.getResponse()
         : 'Internal server error';
+
+    // Normalize Stellar error codes when present
+    let errorCode: string | undefined;
+    if (exception instanceof Error) {
+      errorCode = normalizeStellarError(exception.message);
+    }
 
     // Log 5xx errors with stack trace; 4xx are client errors — debug level
     if (status >= 500) {
@@ -41,8 +70,12 @@ export class HttpExceptionFilter implements ExceptionFilter {
       statusCode: status,
       timestamp: new Date().toISOString(),
       path: request.url,
-      requestId: request.requestId, // propagate correlation ID into error body
-      message,
+      requestId: request.requestId, // correlation ID for support escalation
+      ...(errorCode ? { error: errorCode } : {}),
+      message:
+        typeof rawResponse === 'string'
+          ? rawResponse
+          : (rawResponse as Record<string, unknown>).message ?? rawResponse,
     });
   }
 }

@@ -14,6 +14,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { MetricsService } from '../metrics/metrics.service';
+import { POLICY_BATCH_GET_MAX } from '../chain/chain.constants';
 import {
   Account,
   BASE_FEE,
@@ -30,6 +31,8 @@ const { Api, assembleTransaction } = SorobanRpc;
 
 export type PolicyTypeEnum = 'Auto' | 'Health' | 'Property';
 export type RegionTierEnum = 'Low' | 'Medium' | 'High';
+export type AgeBandEnum = 'Young' | 'Adult' | 'Senior';
+export type CoverageTypeEnum = 'Basic' | 'Standard' | 'Premium';
 
 export interface SimulatePremiumResult {
   premiumStroops: string;
@@ -179,6 +182,30 @@ export class SorobanService {
     }
   }
 
+  /** Soroban `PolicyLookupKey` map encoding for `get_policies_batch`. */
+  static encodePolicyLookupKey(holder: string, policyId: number): xdr.ScVal {
+    return xdr.scvSortedMap([
+      new xdr.ScMapEntry({
+        key: xdr.ScVal.scvSymbol('holder'),
+        val: new Address(holder).toScVal(),
+      }),
+      new xdr.ScMapEntry({
+        key: xdr.ScVal.scvSymbol('policy_id'),
+        val: nativeToScVal(policyId, { type: 'u32' }),
+      }),
+    ]);
+  }
+
+  private isPolicyBatchTooLargeSimulation(error: string): boolean {
+    const e = error.toLowerCase();
+    return (
+      e.includes('policybatch') ||
+      e.includes('policy_batch') ||
+      // ContractError tag 49 = PolicyBatchTooLarge (niffyinsure validate::Error)
+      /\b49\b/.test(error)
+    );
+  }
+
   private mapSimulationError(error: string): never {
     if (
       error.includes('WasmVm') ||
@@ -273,22 +300,20 @@ export class SorobanService {
 
   /**
    * Build unsigned initiate_policy transaction with simulation-derived footprints.
-   * Argument ordering: holder, policy_type, region, coverage, age, risk_score,
-   *                    start_ledger, end_ledger
-   *
-   * Multisig: authRequirements lists all addresses that must sign Soroban auth
-   * entries before submission. Display these before the wallet popup.
+   * Argument ordering matches `contracts/niffyinsure/src/lib.rs` initiate_policy:
+   * holder, policy_type, region, age_band, coverage_type, safety_score,
+   * base_amount, asset, beneficiary (optional payout address).
    */
   async buildInitiatePolicyTransaction(args: {
     holder: string;
     policyType: PolicyTypeEnum;
     region: RegionTierEnum;
-    coverage: bigint;
-    age: number;
-    riskScore: number;
+    ageBand: AgeBandEnum;
+    coverageType: CoverageTypeEnum;
+    safetyScore: number;
+    baseAmount: bigint;
     asset?: string;
-    startLedger?: number;
-    durationLedgers?: number;
+    beneficiary?: string;
   }): Promise<BuildTransactionResult> {
     return this.trackRpc('build_initiate_policy', () =>
       this._buildInitiatePolicyTransaction(args),
@@ -299,33 +324,38 @@ export class SorobanService {
     holder: string;
     policyType: PolicyTypeEnum;
     region: RegionTierEnum;
-    coverage: bigint;
-    age: number;
-    riskScore: number;
+    ageBand: AgeBandEnum;
+    coverageType: CoverageTypeEnum;
+    safetyScore: number;
+    baseAmount: bigint;
     asset?: string;
-    startLedger?: number;
-    durationLedgers?: number;
+    beneficiary?: string;
   }): Promise<BuildTransactionResult> {
     const server = this.makeServer();
     const account = await this.loadAccount(server, args.holder);
     const ledgerInfo = await server.getLatestLedger();
 
-    const startLedger = args.startLedger ?? ledgerInfo.sequence;
-    const endLedger = startLedger + (args.durationLedgers ?? 1_051_200);
-
     // Resolve asset: use caller-supplied address or fall back to the configured default token.
     const assetAddress = args.asset ?? this.configService.get<string>('DEFAULT_TOKEN_CONTRACT_ID', '');
+
+    const beneficiaryScv =
+      args.beneficiary == null || args.beneficiary === ''
+        ? nativeToScVal(null)
+        : nativeToScVal(new Address(args.beneficiary), {
+            type: 'option',
+            innerType: 'address',
+          } as { type: string; innerType: string });
 
     const scArgs = [
       new Address(args.holder).toScVal(),
       SorobanService.enumVariantToScVal(args.policyType),
       SorobanService.enumVariantToScVal(args.region),
-      nativeToScVal(args.coverage, { type: 'i128' }),
-      nativeToScVal(args.age, { type: 'u32' }),
-      nativeToScVal(args.riskScore, { type: 'u32' }),
-      nativeToScVal(startLedger, { type: 'u32' }),
-      nativeToScVal(endLedger, { type: 'u32' }),
+      SorobanService.enumVariantToScVal(args.ageBand),
+      SorobanService.enumVariantToScVal(args.coverageType),
+      nativeToScVal(args.safetyScore, { type: 'u32' }),
+      nativeToScVal(args.baseAmount, { type: 'i128' }),
       new Address(assetAddress).toScVal(),
+      beneficiaryScv,
     ];
 
     const contract = new Contract(this.contractId);
@@ -539,6 +569,96 @@ export class SorobanService {
       const server = this.makeServer();
       const info = await server.getLatestLedger();
       return info.sequence;
+    });
+  }
+
+  /**
+   * Simulate `get_policies_batch(Vec<PolicyLookupKey>)` → `Vec<Option<Policy>>`.
+   * One RPC round-trip for dashboard bulk loads; order matches `keys`.
+   */
+  async simulateGetPoliciesBatch(args: {
+    keys: { holder: string; policy_id: number }[];
+    sourceAccount?: string;
+  }): Promise<(Record<string, unknown> | null)[]> {
+    return this.trackRpc('simulate_get_policies_batch', () =>
+      this._simulateGetPoliciesBatch(args),
+    );
+  }
+
+  private async _simulateGetPoliciesBatch(args: {
+    keys: { holder: string; policy_id: number }[];
+    sourceAccount?: string;
+  }): Promise<(Record<string, unknown> | null)[]> {
+    if (!this.contractId) {
+      throw new BadRequestException({
+        code: 'CONTRACT_NOT_INITIALIZED',
+        message:
+          'CONTRACT_ID is not configured on the server; cannot simulate get_policies_batch.',
+      });
+    }
+    if (args.keys.length > POLICY_BATCH_GET_MAX) {
+      throw new BadRequestException({
+        code: 'POLICY_BATCH_TOO_LARGE',
+        message: `At most ${POLICY_BATCH_GET_MAX} (holder, policy_id) pairs per batch (on-chain POLICY_BATCH_GET_MAX).`,
+      });
+    }
+    if (args.keys.length === 0) {
+      return [];
+    }
+
+    const source = args.sourceAccount ?? args.keys[0].holder;
+    const server = this.makeServer();
+    const account = await this.loadAccount(server, source);
+    const contract = new Contract(this.contractId);
+    const keysScVal = xdr.ScVal.scvVec(
+      args.keys.map((k) =>
+        SorobanService.encodePolicyLookupKey(k.holder, k.policy_id),
+      ),
+    );
+
+    const tx = new TransactionBuilder(account, {
+      fee: BASE_FEE,
+      networkPassphrase: this.networkPassphrase,
+    })
+      .addOperation(contract.call('get_policies_batch', keysScVal))
+      .setTimeout(30)
+      .build();
+
+    const simulation = await server.simulateTransaction(tx);
+    if (Api.isSimulationError(simulation)) {
+      const err = simulation as SorobanRpc.Api.SimulateTransactionErrorResponse;
+      if (this.isPolicyBatchTooLargeSimulation(err.error)) {
+        throw new BadRequestException({
+          code: 'POLICY_BATCH_TOO_LARGE',
+          message: `At most ${POLICY_BATCH_GET_MAX} (holder, policy_id) pairs per batch (on-chain POLICY_BATCH_GET_MAX).`,
+        });
+      }
+      this.mapSimulationError(err.error);
+    }
+
+    const success =
+      simulation as SorobanRpc.Api.SimulateTransactionSuccessResponse;
+    const retval = success.result?.retval;
+    if (!retval) {
+      return [];
+    }
+
+    const native = scValToNative(retval) as unknown;
+    if (!Array.isArray(native)) {
+      throw new BadRequestException({
+        code: 'SIMULATION_DECODE_FAILED',
+        message: 'get_policies_batch: unexpected return shape from simulation.',
+      });
+    }
+
+    return native.map((entry: unknown) => {
+      if (entry === null || entry === undefined) {
+        return null;
+      }
+      if (typeof entry === 'object' && entry !== null) {
+        return entry as Record<string, unknown>;
+      }
+      return null;
     });
   }
 

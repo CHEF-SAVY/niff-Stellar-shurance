@@ -1,14 +1,12 @@
 'use client'
 
-import { useCallback, useEffect, useRef, useState } from 'react'
 import { CheckCircle, XCircle, ExternalLink, AlertTriangle } from 'lucide-react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Badge } from '@/components/ui/badge'
 import { useToast } from '@/components/ui/use-toast'
-import { VoteEducationPanel } from './vote-education-panel'
-import { VoteTally } from './vote-tally'
-import { VoteConfirmModal } from './vote-confirm-modal'
 import {
   fetchClaim,
   fetchEligibility,
@@ -25,6 +23,11 @@ import {
   isTerminal,
   isVoteOpen,
 } from '@/lib/schemas/vote'
+import { trackVoteCast } from '@/lib/analytics'
+
+import { VoteConfirmModal } from './vote-confirm-modal'
+import { VoteEducationPanel } from './vote-education-panel'
+import { VoteTally } from './vote-tally'
 
 interface ClaimVotePanelProps {
   claimId: string
@@ -80,7 +83,7 @@ export function ClaimVotePanel({
   // ── Poll tally while vote is open ───────────────────────────────────────────
   useEffect(() => {
     if (!claim) return
-    if (isTerminal(claim.status) || !isVoteOpen(claim.filed_at, currentLedger)) return
+    if (isTerminal(claim.status) || !isVoteOpen(claim.voting_deadline_ledger, currentLedger)) return
 
     pollRef.current = setInterval(loadClaim, POLL_INTERVAL_MS)
     return () => {
@@ -145,6 +148,7 @@ export function ClaimVotePanel({
       )
       setEligibility((prev) => (prev ? { ...prev, priorVote: pendingVote } : prev))
       setSubmitState('done')
+      trackVoteCast(pendingVote === 'Approve' ? 'approve' : 'reject')
 
       toast({
         title: 'Vote submitted',
@@ -170,7 +174,7 @@ export function ClaimVotePanel({
   }, [])
 
   // ── Derived state ───────────────────────────────────────────────────────────
-  const voteOpen = claim ? isVoteOpen(claim.filed_at, currentLedger) : false
+  const voteOpen = claim ? isVoteOpen(claim.voting_deadline_ledger, currentLedger) : false
   const terminal = claim ? isTerminal(claim.status) : false
   const alreadyVoted = eligibility?.priorVote != null
   const eligible = eligibility?.eligible === true

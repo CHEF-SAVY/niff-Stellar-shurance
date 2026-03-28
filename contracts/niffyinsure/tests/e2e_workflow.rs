@@ -83,6 +83,7 @@ fn e2e_full_lifecycle_approve() {
         &80,        // safety_score
         &1_000_000, // base_amount (coverage)
         &token,
+        &None,
     );
     assert!(policy.is_active);
     let policy_id = policy.policy_id;
@@ -138,6 +139,7 @@ fn e2e_full_lifecycle_reject() {
         &90,
         &500_000,
         &token,
+        &None,
     );
     let policy_id = policy.policy_id;
 
@@ -177,6 +179,7 @@ fn e2e_finalize_after_deadline() {
         &70,
         &2_000_000,
         &token,
+        &None,
     );
     let policy_id = policy.policy_id;
 
@@ -226,6 +229,7 @@ fn e2e_pause_blocks_initiate() {
         &80,
         &1_000_000,
         &token,
+        &None,
     );
     assert!(result.is_err());
 }
@@ -247,6 +251,7 @@ fn e2e_pause_blocks_file_claim() {
         &80,
         &1_000_000,
         &token,
+        &None,
     );
 
     // Pause
@@ -277,6 +282,7 @@ fn e2e_pause_blocks_vote() {
         &80,
         &1_000_000,
         &token,
+        &None,
     );
 
     let details = String::from_str(&env, "Test");
@@ -314,6 +320,7 @@ fn e2e_unpause_restores_operations() {
         &80,
         &1_000_000,
         &token,
+        &None,
     );
     assert!(policy.is_active);
 }
@@ -340,6 +347,7 @@ fn e2e_pause_allows_payout() {
         &80,
         &1_000_000,
         &token,
+        &None,
     );
 
     let details = String::from_str(&env, "Test");
@@ -379,6 +387,7 @@ fn e2e_bind_pause_allows_claims() {
         &80,
         &1_000_000,
         &token,
+        &None,
     );
 
     // Pause only binding
@@ -422,6 +431,7 @@ fn e2e_claims_pause_allows_binding() {
         &80,
         &1_000_000,
         &token,
+        &None,
     );
     assert!(policy.is_active);
 }
@@ -469,6 +479,7 @@ fn e2e_non_admin_cannot_process_claim() {
         &80,
         &1_000_000,
         &token,
+        &None,
     );
 
     let details = String::from_str(&env, "Test");
@@ -499,6 +510,7 @@ fn e2e_claim_exceeds_coverage() {
         &80,
         &100_000, // coverage
         &token,
+        &None,
     );
 
     // Try to claim more than coverage
@@ -530,6 +542,7 @@ fn e2e_claim_on_inactive_policy() {
         &80,
         &1_000_000,
         &token,
+        &None,
     );
 
     // Terminate the policy (if terminate_policy exists)
@@ -573,6 +586,7 @@ fn e2e_double_vote_fails() {
         &80,
         &1_000_000,
         &token,
+        &None,
     );
 
     let details = String::from_str(&env, "Test");

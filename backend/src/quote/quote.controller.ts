@@ -1,5 +1,6 @@
 import { Controller, Post, Body, HttpCode, HttpStatus } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 import { QuoteService } from './quote.service';
 import { GeneratePremiumDto } from './dto/generate-premium.dto';
 
@@ -17,6 +18,8 @@ export class QuoteController {
    */
   @Post('generate-premium')
   @HttpCode(HttpStatus.OK)
+  // Simulation is CPU/RPC-expensive: 20 req / 60 s per identity
+  @Throttle({ default: { limit: 20, ttl: 60_000 } })
   @ApiOperation({ summary: 'Simulate annual premium for a proposed policy' })
   @ApiResponse({ status: 200, description: 'Premium quote' })
   @ApiResponse({ status: 400, description: 'Validation error or account not found' })

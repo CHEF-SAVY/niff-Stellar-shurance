@@ -12,6 +12,34 @@ permissions:
   contents: read
 
 jobs:
+  # ── Frontend quality gate ─────────────────────────────────────────────────
+  frontend:
+    name: Frontend (lint → typecheck → build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint (fail on warnings)
+        run: npm run lint -- --max-warnings=0
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Build
+        run: npm run build
+
   # ── Soroban ABI golden-vector drift guard ────────────────────────────────
   golden-vectors:
     name: Soroban ABI golden vectors
@@ -148,7 +176,7 @@ jobs:
   e2e-tests:
     name: Playwright E2E tests
     runs-on: ubuntu-latest
-    needs: quality-build
+    needs: frontend
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -167,7 +195,69 @@ jobs:
         with:
           name: playwright-failure-${{ github.run_id }}
           path: |
+ feat/accessibility-audit
+            sbom-backend.json
+            sbom-frontend.json
+          retention-days: 90
+
+  # ── Frontend ──────────────────────────────────────────────────────────────
+  frontend:
+    name: Frontend (Next.js / TypeScript)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run check-docs
+      - run: npm run build
+      - run: npm test
+
+  # ── Accessibility (axe) ───────────────────────────────────────────────────
+  accessibility:
+    name: Accessibility (axe / Playwright)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - run: npm ci
+      - run: npm run build
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Run axe accessibility checks
+        run: npx playwright test tests/accessibility.spec.ts --reporter=list
+        env:
+          BASE_URL: http://localhost:3000
+
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: axe-report-${{ github.sha }}
+          path: frontend/playwright-report/
+          retention-days: 14
+
             test-results
             playwright-report
             traces
             .playwright/traces
+

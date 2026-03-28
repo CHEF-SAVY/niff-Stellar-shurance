@@ -65,6 +65,8 @@ pub enum Error {
     AppealNotOpen = 47,
     /// Appeal voting window is still open; cannot finalize appeal yet.
     AppealWindowStillOpen = 48,
+    /// Admin `set_voting_duration_ledgers` value outside allowed [min, max] range.
+    VotingDurationOutOfBounds = 49,
 }
 
 pub fn check_policy(policy: &Policy) -> Result<(), Error> {

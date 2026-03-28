@@ -34,6 +34,11 @@ export interface ClaimSummaryDto {
   /** Number of reject votes cast by policyholders. */
   reject_votes: number;
   /**
+   * On-chain voting deadline ledger (inclusive); same as contract `voting_deadline_ledger`.
+   * @example 1250000
+   */
+  voting_deadline_ledger?: number;
+  /**
    * Link to the full claim resource.
    * @example "/claims/42"
    */
@@ -130,6 +135,11 @@ export interface PolicyDto {
    */
   claims: ClaimSummaryDto[];
   /**
+   * Optional payout beneficiary (on-chain). When set, approved claim proceeds
+   * are sent here instead of the holder. Null/omitted means holder receives payout.
+   */
+  beneficiary: string | null;
+  /**
    * Self-link for this policy resource.
    * @example "/policies/GABC.../1"
    */
@@ -164,6 +174,7 @@ export function toClaimSummaryDto(c: Claim): ClaimSummaryDto {
     status: c.status,
     approve_votes: c.approve_votes,
     reject_votes: c.reject_votes,
+    voting_deadline_ledger: c.voting_deadline_ledger,
     _link: `/claims/${c.claim_id}`,
   };
 }
@@ -188,6 +199,7 @@ export function toPolicyDto(p: Policy, claims: Claim[]): PolicyDto {
       avg_ledger_close_seconds: 5,
     },
     claims: claims.map(toClaimSummaryDto),
+    beneficiary: p.beneficiary ?? null,
     _link: `/policies/${encodeURIComponent(p.holder)}/${p.policy_id}`,
   };
 }

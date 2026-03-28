@@ -3,10 +3,10 @@
  * Feature: claims-board
  */
 
-import * as fc from "fast-check";
 import { render } from "@testing-library/react";
+import * as fc from "fast-check";
 import React from "react";
-import { QuorumIndicator } from "../QuorumIndicator";
+
 
 // Arbitrary: non-negative integers for vote counts and threshold
 const nonNegInt = fc.integer({ min: 0, max: 10_000 });
@@ -102,6 +102,7 @@ describe("Property 16: ARIA live region is present on tally-bearing elements", (
 });
 
 // ─── DeadlineDisplay property tests ──────────────────────────────────────────
+// eslint-disable-next-line import/order
 import { DeadlineDisplay } from "../DeadlineDisplay";
 
 // Arbitrary: future ISO-8601 timestamp (1 second to 365 days from now)
@@ -209,6 +210,7 @@ describe("Property 8: Indexer lag disclaimer is always present", () => {
 
 // ─── FilterBar property tests ─────────────────────────────────────────────────
 import { FilterBar } from "../FilterBar";
+import { QuorumIndicator } from "../QuorumIndicator";
 import type { ClaimFilters } from "../types";
 
 const DEFAULT_FILTERS: ClaimFilters = {

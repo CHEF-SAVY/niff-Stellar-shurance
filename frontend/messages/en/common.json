@@ -1,0 +1,28 @@
+{
+  "nav": {
+    "quote": "Get Quote",
+    "claims": "Claims",
+    "policy": "My Policy",
+    "docs": "Docs",
+    "support": "Support"
+  },
+  "actions": {
+    "submit": "Submit",
+    "cancel": "Cancel",
+    "retry": "Retry",
+    "loadMore": "Load More",
+    "loading": "Loading…",
+    "copy": "Copy",
+    "copied": "Copied",
+    "viewExplorer": "View on Explorer"
+  },
+  "errors": {
+    "generic": "Something went wrong. Please try again.",
+    "network": "Network error. Check your connection and retry.",
+    "rateLimit": "Too many requests — please wait a moment.",
+    "notFound": "Not found."
+  },
+  "legal": {
+    "termsNotice": "By continuing, you agree to our <termsLink>Terms of Service</termsLink> and <privacyLink>Privacy Policy</privacyLink>."
+  }
+}

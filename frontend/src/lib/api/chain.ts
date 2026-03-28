@@ -35,10 +35,26 @@ import type { OnChainPolicySummary, OnChainClaimSummary } from '@/types/claim';
 
 const { apiUrl: API_BASE_URL } = getConfig();
 
+/** Mirrors on-chain `POLICY_BATCH_GET_MAX` / `PAGE_SIZE_MAX` (contracts/niffyinsure). */
+export const POLICY_BATCH_GET_MAX = 20;
+
 async function handleResponse<T>(res: Response): Promise<T> {
   if (!res.ok) {
-    const err = await res.json().catch(() => ({ message: 'Chain read failed' }));
-    throw new ChainReadError(err.code ?? 'CHAIN_READ_FAILED', err.message ?? 'Chain read failed');
+    const body = await res.json().catch(() => ({}));
+    // NestJS BadRequestException({ code, message }) → { message: { code, message }, statusCode }
+    const nested =
+      body.message !== undefined &&
+      typeof body.message === 'object' &&
+      !Array.isArray(body.message)
+        ? (body.message as { code?: string; message?: string })
+        : null;
+    const code = nested?.code ?? body.code ?? 'CHAIN_READ_FAILED';
+    const msg =
+      nested?.message ??
+      (typeof body.message === 'string' ? body.message : null) ??
+      body.error ??
+      'Chain read failed';
+    throw new ChainReadError(code, msg);
   }
   return res.json();
 }
@@ -57,6 +73,32 @@ export class ChainReadError extends Error {
  * Fetch a single policy by (holder, policyId) via Soroban simulation.
  * Returns `null` when the policy does not exist (404 pattern).
  */
+export type PolicyBatchKey = { holder: string; policyId: number };
+
+/**
+ * Batch-fetch policies via one `get_policies_batch` simulation.
+ * Results align with `keys`; missing policies are `null` at that index.
+ */
+export async function getPoliciesBatch(
+  keys: PolicyBatchKey[],
+): Promise<(Record<string, unknown> | null)[]> {
+  if (keys.length > POLICY_BATCH_GET_MAX) {
+    throw new ChainReadError(
+      'POLICY_BATCH_TOO_LARGE',
+      `At most ${POLICY_BATCH_GET_MAX} policies per batch.`,
+    );
+  }
+  const res = await fetch(`${API_BASE_URL}/api/chain/policies/batch`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      keys: keys.map((k) => ({ holder: k.holder, policy_id: k.policyId })),
+    }),
+  });
+  const data = await handleResponse<{ results: (Record<string, unknown> | null)[] }>(res);
+  return data.results;
+}
+
 export async function getPolicy(
   holder: string,
   policyId: number,
@@ -121,6 +163,7 @@ export async function listClaims(
 export const CHAIN_READ_ERROR_MESSAGES: Record<string, string> = {
   CHAIN_READ_FAILED: 'Chain read failed. Please try again.',
   CONTRACT_NOT_INITIALIZED: 'Contract is not yet initialized.',
+  POLICY_BATCH_TOO_LARGE: 'Too many policies in one batch. Load at most 20 at a time.',
   RPC_UNAVAILABLE: 'Soroban RPC is temporarily unavailable. Falling back to indexer data.',
 };
 

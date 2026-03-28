@@ -21,6 +21,18 @@ export enum RegionTierEnum {
   High = 'High',
 }
 
+export enum AgeBandEnum {
+  Young = 'Young',
+  Adult = 'Adult',
+  Senior = 'Senior',
+}
+
+export enum CoverageTypeEnum {
+  Basic = 'Basic',
+  Standard = 'Standard',
+  Premium = 'Premium',
+}
+
 export class GeneratePremiumDto {
   @ApiProperty({ enum: PolicyTypeEnum })
   @IsEnum(PolicyTypeEnum, {

@@ -48,6 +48,7 @@ export {
 } from './card'
 export { Badge, badgeVariants } from './badge'
 export { Stepper, StepContent, type Step } from './stepper'
+export { InlineError } from './inline-error'
 export { VoteEducationPanel } from '../claims/vote-education-panel'
 export { VoteTally } from '../claims/vote-tally'
 export { VoteConfirmModal } from '../claims/vote-confirm-modal'

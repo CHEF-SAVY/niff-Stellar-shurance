@@ -160,6 +160,12 @@
                     },
                     {
                       "key": {
+                        "symbol": "beneficiary"
+                      },
+                      "val": "void"
+                    },
+                    {
+                      "key": {
                         "symbol": "coverage"
                       },
                       "val": {
@@ -333,6 +339,12 @@
                       "val": {
                         "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
                       }
+                    },
+                    {
+                      "key": {
+                        "symbol": "beneficiary"
+                      },
+                      "val": "void"
                     },
                     {
                       "key": {

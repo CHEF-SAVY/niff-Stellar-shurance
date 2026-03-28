@@ -57,6 +57,18 @@ export interface OnChainClaimSummary {
   /** 'Processing' | 'Pending' | 'Approved' | 'Paid' | 'Rejected' | 'UnderAppeal' | 'AppealApproved' | 'AppealRejected' */
   status: string;
   filed_at: number;
+  /** Last ledger where a vote may be cast (inclusive); frozen at filing time. */
+  voting_deadline_ledger: number;
+}
+
+/**
+ * Mirrors contract `ClaimStatusHistoryEntry` — append-only `(status, ledger)` log
+ * on the full `Claim` (also returned by `get_claim_history`). Oldest entries are
+ * dropped after `CLAIM_STATUS_HISTORY_MAX` (24); use `status` for canonical state.
+ */
+export interface OnChainClaimStatusHistoryEntry {
+  status: string;
+  ledger: number;
 }
 
 /** Max items per paginated chain-read call (mirrors `PAGE_SIZE_MAX` in types.rs). */

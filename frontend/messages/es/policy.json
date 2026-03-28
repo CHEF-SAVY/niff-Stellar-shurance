@@ -1,0 +1,22 @@
+{
+  "quote": {
+    "title": "Obtener Cotización de Seguro",
+    "subtitle": "Calcula tu prima para cobertura de seguro de contratos inteligentes en la red Stellar.",
+    "howItWorks": "Cómo Funciona",
+    "step1Title": "1. Proporciona Detalles",
+    "step1Desc": "Ingresa la dirección de tu contrato, monto de cobertura y factores de riesgo.",
+    "step2Title": "2. Obtén Cotización",
+    "step2Desc": "Nuestro algoritmo calcula tu prima basándose en la evaluación de riesgo.",
+    "step3Title": "3. Compra la Póliza",
+    "step3Desc": "Acepta la cotización y paga la prima para activar la cobertura."
+  },
+  "coverage": {
+    "premium": "Prima",
+    "premiumAmount": "Prima: {amount} XLM",
+    "coverageAmount": "Monto de Cobertura",
+    "expiry": "Vencimiento de Póliza",
+    "active": "Activa",
+    "expired": "Vencida",
+    "pending": "Pendiente"
+  }
+}

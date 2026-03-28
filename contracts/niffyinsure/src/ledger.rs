@@ -73,8 +73,23 @@ pub const LEDGERS_PER_WEEK: u32 = 120_960;
 pub const POLICY_DURATION_LEDGERS: u32 = 30 * LEDGERS_PER_DAY; // 518_400
 
 /// Voting window: ~7 days from claim filing.
-/// Votes are accepted while `now < filed_at + VOTE_WINDOW_LEDGERS`.
+/// Default value for [`crate::storage::get_voting_duration_ledgers`] and historical
+/// behaviour: new claims use `voting_deadline_ledger = filed_at + duration` where
+/// `duration` defaults to this constant until an admin sets another value in bounds.
 pub const VOTE_WINDOW_LEDGERS: u32 = 7 * LEDGERS_PER_DAY; // 120_960
+
+/// Minimum allowed `voting_duration_ledgers` (admin config).
+///
+/// **17_280 ledgers (~1 day at nominal 5 s/ledger)** — guarantees at least one full
+/// nominal day so voters in all timezones have a reasonable window; shorter windows
+/// risk disenfranchisement and operational mistakes.
+pub const MIN_VOTING_DURATION_LEDGERS: u32 = LEDGERS_PER_DAY;
+
+/// Maximum allowed `voting_duration_ledgers` (admin config).
+///
+/// **967_680 ledgers (~8 weeks)** — caps how long approved-but-unpaid claim flows and
+/// voter duty can stretch; longer windows require a contract upgrade and broader review.
+pub const MAX_VOTING_DURATION_LEDGERS: u32 = 8 * LEDGERS_PER_WEEK;
 
 /// Renewal window: holder may renew starting this many ledgers before expiry.
 /// Renewal is accepted while `end - RENEWAL_WINDOW_LEDGERS <= now < end`.
@@ -144,7 +159,11 @@ pub fn is_in_renewal_window(now: u32, end: u32, window: u32) -> bool {
 ///
 /// Votes are accepted while `now < filed_at + vote_window`.
 /// At `now == filed_at + vote_window` the window is closed.
+///
+/// **Note:** On-chain claim voting uses [`is_claim_voting_open`] with the stored
+/// `voting_deadline_ledger` instead. This helper remains for unit tests and docs.
 #[inline]
+#[allow(dead_code)]
 pub fn is_vote_open(now: u32, filed_at: u32, vote_window: u32) -> bool {
     let deadline = filed_at.saturating_add(vote_window);
     now < deadline
@@ -154,8 +173,41 @@ pub fn is_vote_open(now: u32, filed_at: u32, vote_window: u32) -> bool {
 ///
 /// `finalize_claim` may be called once `now >= filed_at + vote_window`.
 #[inline]
+#[allow(dead_code)]
 pub fn is_vote_deadline_passed(now: u32, filed_at: u32, vote_window: u32) -> bool {
     !is_vote_open(now, filed_at, vote_window)
+}
+
+/// Validates admin-supplied voting duration before it is written to instance storage.
+#[inline]
+pub fn validate_voting_duration_ledgers(v: u32) -> Result<(), crate::validate::Error> {
+    if v < MIN_VOTING_DURATION_LEDGERS || v > MAX_VOTING_DURATION_LEDGERS {
+        return Err(crate::validate::Error::VotingDurationOutOfBounds);
+    }
+    Ok(())
+}
+
+// ── Per-claim voting deadline (stored on `Claim::voting_deadline_ledger`) ─────
+
+/// Returns `true` while votes are accepted for this claim.
+///
+/// **Inclusive deadline:** `voting_deadline_ledger` is the **last** ledger in which a
+/// vote may be included (matches product requirement: vote at deadline ledger succeeds;
+/// one ledger later reverts).
+///
+/// This differs from [`is_vote_open`], which uses a half-open window on
+/// `filed_at + vote_window` (exclusive end). Always use this helper (and the stored
+/// `voting_deadline_ledger`) for claim voting — never recompute the deadline from the
+/// current global duration config.
+#[inline]
+pub fn is_claim_voting_open(now: u32, voting_deadline_ledger: u32) -> bool {
+    now <= voting_deadline_ledger
+}
+
+/// Returns `true` when [`finalize_claim`] may run (voting period fully ended).
+#[inline]
+pub fn is_claim_past_voting_deadline(now: u32, voting_deadline_ledger: u32) -> bool {
+    now > voting_deadline_ledger
 }
 
 /// Returns `true` if the rate-limit window has elapsed since `last_filed_at`.
@@ -351,5 +403,31 @@ mod tests {
     #[test]
     fn approx_secs_remaining_zero_when_expired() {
         assert_eq!(approx_secs_remaining(100, 100), 0);
+    }
+
+    // ── is_claim_voting_open (inclusive deadline) ─────────────────────────────
+
+    #[test]
+    fn claim_vote_open_at_deadline_ledger() {
+        assert!(is_claim_voting_open(200, 200));
+    }
+
+    #[test]
+    fn claim_vote_closed_one_ledger_after_deadline() {
+        assert!(!is_claim_voting_open(201, 200));
+    }
+
+    #[test]
+    fn claim_past_deadline_strictly_after_deadline() {
+        assert!(!is_claim_past_voting_deadline(200, 200));
+        assert!(is_claim_past_voting_deadline(201, 200));
+    }
+
+    #[test]
+    fn validate_voting_duration_bounds() {
+        assert!(validate_voting_duration_ledgers(MIN_VOTING_DURATION_LEDGERS).is_ok());
+        assert!(validate_voting_duration_ledgers(MAX_VOTING_DURATION_LEDGERS).is_ok());
+        assert!(validate_voting_duration_ledgers(MIN_VOTING_DURATION_LEDGERS - 1).is_err());
+        assert!(validate_voting_duration_ledgers(MAX_VOTING_DURATION_LEDGERS + 1).is_err());
     }
 }
