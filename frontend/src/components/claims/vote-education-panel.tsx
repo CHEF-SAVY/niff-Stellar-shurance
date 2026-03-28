@@ -1,7 +1,8 @@
 'use client'
 
-import { useState } from 'react'
 import { Info, ChevronDown, ChevronUp } from 'lucide-react'
+import { useState } from 'react'
+
 import { cn } from '@/lib/utils'
 
 export function VoteEducationPanel() {

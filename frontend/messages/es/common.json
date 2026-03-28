@@ -1,0 +1,28 @@
+{
+  "nav": {
+    "quote": "Obtener Cotización",
+    "claims": "Reclamaciones",
+    "policy": "Mi Póliza",
+    "docs": "Documentación",
+    "support": "Soporte"
+  },
+  "actions": {
+    "submit": "Enviar",
+    "cancel": "Cancelar",
+    "retry": "Reintentar",
+    "loadMore": "Cargar más",
+    "loading": "Cargando…",
+    "copy": "Copiar",
+    "copied": "Copiado",
+    "viewExplorer": "Ver en el Explorador"
+  },
+  "errors": {
+    "generic": "Algo salió mal. Por favor, inténtalo de nuevo.",
+    "network": "Error de red. Verifica tu conexión e inténtalo de nuevo.",
+    "rateLimit": "Demasiadas solicitudes — espera un momento.",
+    "notFound": "No encontrado."
+  },
+  "legal": {
+    "termsNotice": "Al continuar, aceptas nuestros <termsLink>Términos de Servicio</termsLink> y <privacyLink>Política de Privacidad</privacyLink>."
+  }
+}

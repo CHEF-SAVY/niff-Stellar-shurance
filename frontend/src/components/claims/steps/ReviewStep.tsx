@@ -1,5 +1,6 @@
-import { Card, CardContent } from '@/components/ui';
 import { FileText, Image as ImageIcon, Wallet } from 'lucide-react';
+
+import { Card, CardContent } from '@/components/ui';
 
 interface ReviewStepProps {
   data: {

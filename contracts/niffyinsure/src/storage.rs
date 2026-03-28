@@ -30,8 +30,14 @@ pub enum DataKey {
     ActivePolicyCount(Address),
     /// Optional per-transaction cap for emergency sweep operations (i128).
     SweepCap,
-    /// Ledgers added to `filed_at` for each new claim's `voting_deadline_ledger`.
-    VoteDurLedgers,
+    // ── Reserved: future governance token (`governance_token` module) ────────
+    /// Runtime toggle: only meaningful when crate is built with `governance-token`.
+    /// Unset or `false` in MVP; no token logic runs unless feature + flag align.
+    GovernanceTokenRuntimeEnabled,
+    /// Future token contract address (stub storage only; no transfers in this crate yet).
+    GovernanceTokenAddress,
+    /// Future schema / migration version for governance-token config.
+    GovernanceTokenConfigVersion,
     // ── Persistent tier ──────────────────────────────────────────────────
     Policy(Address, u32),
     PolicyCounter(Address),

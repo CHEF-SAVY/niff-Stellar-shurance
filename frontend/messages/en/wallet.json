@@ -1,0 +1,27 @@
+{
+  "balance": {
+    "title": "Wallet Balance",
+    "xlmBalance": "You have {amount} XLM",
+    "noBalance": "No balance available."
+  },
+  "history": {
+    "title": "Transaction History",
+    "filterAll": "All",
+    "filterPolicy": "Policy",
+    "filterClaims": "Claims",
+    "empty": "No transactions found.",
+    "purchasePolicy": "Purchase Policy",
+    "type": "Type",
+    "date": "Date",
+    "status": "Status",
+    "hash": "Hash",
+    "statusSuccess": "Success",
+    "statusFailed": "Failed",
+    "types": {
+      "premiumPayment": "Premium Payment",
+      "claimPayout": "Claim Payout",
+      "policyRenewal": "Policy Renewal",
+      "claimSubmission": "Claim Submission"
+    }
+  }
+}

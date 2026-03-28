@@ -2,9 +2,10 @@
 
 // Feature: claims-board
 
-import { QuorumIndicator } from "./QuorumIndicator";
-import { DeadlineDisplay } from "./DeadlineDisplay";
 import type { ClaimBoard } from "@/lib/schemas/claims-board";
+
+import { DeadlineDisplay } from "./DeadlineDisplay";
+import { QuorumIndicator } from "./QuorumIndicator";
 
 // Requirements: 1.5, 8.1, 8.2, 8.3, 9.1, 9.3
 

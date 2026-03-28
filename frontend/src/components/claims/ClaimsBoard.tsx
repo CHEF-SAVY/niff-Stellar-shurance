@@ -4,17 +4,19 @@
 // Requirements: 1.1, 1.2, 1.3, 1.4, 4.1, 4.3, 6.1, 6.5, 9.2
 
 import React, { useState, useCallback, useRef, useEffect } from "react";
-import { FilterBar } from "./FilterBar";
-import { ClaimList } from "./ClaimList";
-import { PaginationControls } from "./PaginationControls";
-import { useClaimsData } from "@/lib/hooks/useClaimsData";
-import { useRealtimeTallies } from "@/lib/hooks/useRealtimeTallies";
+
 import { useAuth } from "@/lib/hooks/useAuth";
-import { useQueryParamFilters } from "@/lib/hooks/useQueryParamFilters";
+import { useClaimsData } from "@/lib/hooks/useClaimsData";
 import { useNotifications } from "@/lib/hooks/useNotifications";
-import { useLatestLedger } from "@/hooks/use-latest-ledger";
-import type { ClaimFilters, TallyUpdate } from "./types";
+import { useQueryParamFilters } from "@/lib/hooks/useQueryParamFilters";
+import { useRealtimeTallies } from "@/lib/hooks/useRealtimeTallies";
 import type { ClaimBoard } from "@/lib/schemas/claims-board";
+
+import { ClaimList } from "./ClaimList";
+import { FilterBar } from "./FilterBar";
+import { PaginationControls } from "./PaginationControls";
+import type { ClaimFilters, TallyUpdate } from "./types";
+
 
 // ---------------------------------------------------------------------------
 // ClaimsBoard

@@ -4,8 +4,10 @@
 // Requirements: 7.1, 7.2
 
 import { useState, useRef, useCallback } from "react";
-import { ClaimRow } from "./ClaimRow";
+
 import type { ClaimBoard } from "@/lib/schemas/claims-board";
+
+import { ClaimRow } from "./ClaimRow";
 
 const ROW_HEIGHT_PX = 120;
 const OVERSCAN = 3;

@@ -4,6 +4,8 @@
 pub mod admin;
 mod calculator;
 mod claim;
+pub mod events;
+mod governance_token;
 mod ledger;
 mod policy;
 mod policy_lifecycle;
@@ -208,33 +210,6 @@ impl NiffyInsure {
 
     pub fn get_claim(env: Env, claim_id: u64) -> Result<types::Claim, validate::Error> {
         claim::get_claim(&env, claim_id)
-    }
-
-    /// Ledgers added at each claim filing to compute `voting_deadline_ledger` for that claim.
-    pub fn get_vote_duration_ledgers(env: Env) -> u32 {
-        storage::get_voting_duration_ledgers(&env)
-    }
-
-    /// Admin-only: set voting duration for **future** filings. Existing claims keep their stored deadline.
-    pub fn admin_set_vote_duration_ledgers(
-        env: Env,
-        new_ledgers: u32,
-    ) -> Result<(), validate::Error> {
-        let admin = storage::get_admin(&env);
-        admin.require_auth();
-        ledger::validate_voting_duration_ledgers(new_ledgers)?;
-        storage::bump_instance(&env);
-        let old = storage::get_voting_duration_ledgers(&env);
-        if old == new_ledgers {
-            return Ok(());
-        }
-        storage::set_voting_duration_ledgers(&env, new_ledgers);
-        VotingDurationUpdated {
-            old_ledgers: old,
-            new_ledgers,
-        }
-        .publish(&env);
-        Ok(())
     }
 
     pub fn get_claim_counter(env: Env) -> u64 {
@@ -582,6 +557,36 @@ impl NiffyInsure {
     /// Get detailed pause flags (bind_paused, claims_paused).
     pub fn get_pause_flags(env: Env) -> storage::PauseFlags {
         storage::get_pause_flags(&env)
+    }
+}
+
+/// Governance token: reserved entrypoints only when built with `--features governance-token`.
+/// No mint/transfer/balance logic — see `governance_token` module TODO.
+#[cfg(feature = "governance-token")]
+#[contractimpl]
+impl NiffyInsure {
+    pub fn gov_token_runtime_enabled(env: Env) -> bool {
+        governance_token::governance_token_effective_enabled(&env)
+    }
+
+    pub fn gov_set_token_runtime_enabled(env: Env, admin: Address, enabled: bool) {
+        admin.require_auth();
+        let stored = storage::get_admin(&env);
+        assert!(admin == stored, "only admin");
+        storage::bump_instance(&env);
+        governance_token::set_governance_token_runtime_enabled(&env, enabled);
+    }
+
+    pub fn gov_token_address(env: Env) -> Option<Address> {
+        governance_token::get_governance_token_address(&env)
+    }
+
+    pub fn gov_set_token_address_stub(env: Env, admin: Address, token: Address) {
+        admin.require_auth();
+        let stored = storage::get_admin(&env);
+        assert!(admin == stored, "only admin");
+        storage::bump_instance(&env);
+        governance_token::set_governance_token_address(&env, &token);
     }
 }
 

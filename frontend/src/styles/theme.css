@@ -1,0 +1,23 @@
+/**
+ * theme.css
+ * Re-exports the global CSS variables as a reference for non-Tailwind usage
+ * (e.g. inline styles, canvas, charting libraries).
+ * Import in layout.tsx if needed: import '@/styles/theme.css'
+ */
+
+:root {
+  /* Brand */
+  --color-primary: hsl(217 91% 60%);
+
+  /* Insurance domain */
+  --color-success: hsl(142 71% 45%);
+  --color-warning: hsl(38 92% 50%);
+  --color-error: hsl(0 84% 60%);
+
+  /* Spacing scale (mirrors Tailwind) */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-4: 1rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+}

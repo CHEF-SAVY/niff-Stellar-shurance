@@ -1,7 +1,8 @@
 "use client";
 
-import { useCallback, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { useCallback, useState } from "react";
+
 import {
   type ClaimFilters,
   DEFAULT_FILTERS,

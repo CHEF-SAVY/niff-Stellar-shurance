@@ -2,10 +2,11 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { z } from "zod";
-import { ClaimBoardSchema } from "@/lib/schemas/claims-board";
-import type { ClaimBoard } from "@/lib/schemas/claims-board";
+
 import type { ClaimFilters } from "@/components/claims/types";
 import { FILTER_QUERY_PARAMS } from "@/components/claims/types";
+import { ClaimBoardSchema } from "@/lib/schemas/claims-board";
+import type { ClaimBoard } from "@/lib/schemas/claims-board";
 
 // ---------------------------------------------------------------------------
 // Zod schema for the paginated API response (Requirements 1.2)

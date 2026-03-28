@@ -1,10 +1,11 @@
 /**
- * Simple in-memory rate limiter — no external dependencies.
+ * Legacy in-memory rate limiter — kept for reference only.
  *
- * Strategy: sliding window per IP.
- * Limit: 60 requests / 60 seconds for public policy endpoints.
+ * The active rate limiting is handled by WalletAwareThrottlerGuard (Redis-backed)
+ * registered globally in AppModule via APP_GUARD. Per-route overrides use
+ * @Throttle({ default: { limit, ttl } }) on individual controller methods.
  *
- * For production, replace with a Redis-backed solution (e.g. rate-limiter-flexible).
+ * This file is NOT wired into the application. Do not import it.
  */
 
 import { Request, Response, NextFunction } from "express";
@@ -15,7 +16,7 @@ interface WindowEntry {
 }
 
 const store = new Map<string, WindowEntry>();
-const WINDOW_MS = 60_000; // 1 minute
+const WINDOW_MS = 60_000;
 const MAX_REQUESTS = 60;
 
 function getClientIp(req: Request): string {

@@ -1,0 +1,27 @@
+{
+  "balance": {
+    "title": "Saldo de Billetera",
+    "xlmBalance": "Tienes {amount} XLM",
+    "noBalance": "Saldo no disponible."
+  },
+  "history": {
+    "title": "Historial de Transacciones",
+    "filterAll": "Todas",
+    "filterPolicy": "Póliza",
+    "filterClaims": "Reclamaciones",
+    "empty": "No se encontraron transacciones.",
+    "purchasePolicy": "Comprar Póliza",
+    "type": "Tipo",
+    "date": "Fecha",
+    "status": "Estado",
+    "hash": "Hash",
+    "statusSuccess": "Exitosa",
+    "statusFailed": "Fallida",
+    "types": {
+      "premiumPayment": "Pago de Prima",
+      "claimPayout": "Pago de Reclamación",
+      "policyRenewal": "Renovación de Póliza",
+      "claimSubmission": "Envío de Reclamación"
+    }
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "filing": {
+    "title": "File a Claim",
+    "description": "Submit evidence for your insurance claim.",
+    "policyId": "Policy ID",
+    "amount": "Claim Amount (XLM)",
+    "details": "Incident Details",
+    "submit": "Submit Claim"
+  },
+  "status": {
+    "pending": "Pending Review",
+    "approved": "Approved",
+    "rejected": "Rejected",
+    "paid": "Paid Out"
+  },
+  "updates": {
+    "submitted": "Claim submitted successfully.",
+    "underReview": "Your claim is under review by the DAO.",
+    "payoutSent": "Payout of {amount} XLM has been sent to your wallet."
+  }
+}

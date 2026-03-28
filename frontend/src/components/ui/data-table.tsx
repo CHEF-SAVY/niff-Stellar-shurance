@@ -1,4 +1,8 @@
 import * as React from 'react'
+
+import { cn } from '@/lib/utils'
+
+import { Skeleton } from './skeleton'
 import {
   Table,
   TableBody,
@@ -7,8 +11,6 @@ import {
   TableHeader,
   TableRow,
 } from './table'
-import { Skeleton } from './skeleton'
-import { cn } from '@/lib/utils'
 
 interface Column<T> {
   key: keyof T
