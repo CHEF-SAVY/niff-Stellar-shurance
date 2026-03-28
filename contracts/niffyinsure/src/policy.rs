@@ -200,6 +200,7 @@ pub fn map_quote_error(env: &Env, err: Error) -> QuoteFailure {
         Error::VotingDurationOutOfBounds => {
             "voting duration ledgers outside allowed min/max; see contract docs"
         }
+        Error::PolicyBatchTooLarge => "batch exceeds maximum allowed keys per call",
     };
     QuoteFailure {
         code: err as u32,

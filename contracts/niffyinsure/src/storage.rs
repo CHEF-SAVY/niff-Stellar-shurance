@@ -52,6 +52,8 @@ pub enum DataKey {
     LastClaimLedger(Address),
     /// (claim_id, voter_address) -> VoteOption for appeal round; immutable after first write.
     AppealVote(u64, Address),
+    /// Configurable voting window in ledgers (set by admin via set_voting_duration_ledgers).
+    VoteDurLedgers,
 }
 
 // ── Instance bump ─────────────────────────────────────────────────────────────

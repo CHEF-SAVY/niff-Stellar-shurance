@@ -71,6 +71,7 @@ fn status_history_order_matches_transitions_and_get_claim_history() {
         &80,
         &1_000_000,
         &token,
+        &None::<soroban_sdk::Address>,
     );
 
     let details = String::from_str(&env, "timeline test");
@@ -148,6 +149,7 @@ fn status_history_finalize_reject_sequence() {
         &80,
         &1_000_000,
         &token,
+        &None::<soroban_sdk::Address>,
     );
 
     let details = String::from_str(&env, "reject path");

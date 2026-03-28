@@ -176,6 +176,58 @@ impl NiffyInsure {
         storage::is_allowed_asset(&env, &asset)
     }
 
+    pub fn file_claim(
+        env: Env,
+        holder: Address,
+        policy_id: u32,
+        amount: i128,
+        details: soroban_sdk::String,
+        image_urls: Vec<soroban_sdk::String>,
+    ) -> Result<u64, validate::Error> {
+        holder.require_auth();
+        claim::file_claim(&env, &holder, policy_id, amount, &details, &image_urls)
+    }
+
+    pub fn vote_on_claim(
+        env: Env,
+        voter: Address,
+        claim_id: u64,
+        vote: types::VoteOption,
+    ) -> Result<types::ClaimStatus, validate::Error> {
+        voter.require_auth();
+        claim::vote_on_claim(&env, &voter, claim_id, &vote)
+    }
+
+    pub fn finalize_claim(env: Env, claim_id: u64) -> Result<types::ClaimStatus, validate::Error> {
+        claim::finalize_claim(&env, claim_id)
+    }
+
+    pub fn get_claim_history(
+        env: Env,
+        claim_id: u64,
+    ) -> Result<Vec<types::ClaimStatusHistoryEntry>, validate::Error> {
+        claim::get_claim_history(&env, claim_id)
+    }
+
+    pub fn get_vote_duration_ledgers(env: Env) -> u32 {
+        storage::get_voting_duration_ledgers(&env)
+    }
+
+    pub fn admin_set_vote_duration_ledgers(
+        env: Env,
+        ledgers: u32,
+    ) -> Result<(), validate::Error> {
+        let admin = storage::get_admin(&env);
+        admin.require_auth();
+        if ledgers < ledger::MIN_VOTING_DURATION_LEDGERS
+            || ledgers > ledger::MAX_VOTING_DURATION_LEDGERS
+        {
+            return Err(validate::Error::VotingDurationOutOfBounds);
+        }
+        storage::set_voting_duration_ledgers(&env, ledgers);
+        Ok(())
+    }
+
     pub fn process_claim(env: Env, claim_id: u64) -> Result<(), validate::Error> {
         let admin = storage::get_admin(&env);
         admin.require_auth();

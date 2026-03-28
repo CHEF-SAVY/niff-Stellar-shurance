@@ -106,28 +106,28 @@
 //! See those modules for field-level documentation.
 
 use crate::types::{ClaimStatus, VoteOption};
-use soroban_sdk::{contracttype, symbol_short, Address, Env};
+use soroban_sdk::{contractevent, Address, Env};
 
 /// Bump this when any event payload has a breaking change (semver-major release).
 pub const EVENT_SCHEMA_VERSION: u32 = 1;
-
-pub(crate) const NS: &str = "niffyins";
 
 // ── Claim events ──────────────────────────────────────────────────────────────
 
 /// Emitted by `file_claim`.
 /// topics: (NS, "clm_filed", claim_id, holder)
 /// payload: ClaimFiledData
-#[contracttype]
+#[contractevent(topics = ["niffyins", "clm_filed"])]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ClaimFiledData {
+    #[topic]
+    pub claim_id: u64,
+    #[topic]
+    pub holder: Address,
     pub version: u32,
     pub policy_id: u32,
     /// Amount in stroops (i128; 7 decimals).
     pub amount: i128,
     /// FNV-1a u64 hash of concatenated IPFS CIDs.
-    /// Avoids long-string payload cost while remaining collision-resistant
-    /// for indexer deduplication. Full CIDs are stored off-chain.
     pub image_hash: u64,
     /// Ledger sequence number at filing time.
     pub filed_at: u32,
@@ -142,29 +142,28 @@ pub fn emit_claim_filed(
     image_hash: u64,
     filed_at: u32,
 ) {
-    env.events().publish(
-        (
-            symbol_short!("niffyins"),
-            symbol_short!("clm_filed"),
-            claim_id,
-            holder.clone(),
-        ),
-        ClaimFiledData {
-            version: EVENT_SCHEMA_VERSION,
-            policy_id,
-            amount,
-            image_hash,
-            filed_at,
-        },
-    );
+    ClaimFiledData {
+        claim_id,
+        holder: holder.clone(),
+        version: EVENT_SCHEMA_VERSION,
+        policy_id,
+        amount,
+        image_hash,
+        filed_at,
+    }
+    .publish(env);
 }
 
 /// Emitted by `vote_on_claim` for each ballot cast.
 /// topics: (NS, "vote_cast", claim_id, voter)
 /// payload: VoteCastData
-#[contracttype]
+#[contractevent(topics = ["niffyins", "vote_cast"])]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct VoteCastData {
+    #[topic]
+    pub claim_id: u64,
+    #[topic]
+    pub voter: Address,
     pub version: u32,
     pub vote: VoteOption,
     pub approve_votes: u32,
@@ -180,29 +179,26 @@ pub fn emit_vote_cast(
     approve_votes: u32,
     reject_votes: u32,
 ) {
-    env.events().publish(
-        (
-            symbol_short!("niffyins"),
-            symbol_short!("vote_cast"),
-            claim_id,
-            voter.clone(),
-        ),
-        VoteCastData {
-            version: EVENT_SCHEMA_VERSION,
-            vote,
-            approve_votes,
-            reject_votes,
-            at_ledger: env.ledger().sequence(),
-        },
-    );
+    VoteCastData {
+        claim_id,
+        voter: voter.clone(),
+        version: EVENT_SCHEMA_VERSION,
+        vote,
+        approve_votes,
+        reject_votes,
+        at_ledger: env.ledger().sequence(),
+    }
+    .publish(env);
 }
 
 /// Emitted by `finalize_claim` when the voting deadline passes.
 /// topics: (NS, "clm_final", claim_id)
 /// payload: ClaimFinalizedData
-#[contracttype]
+#[contractevent(topics = ["niffyins", "clm_final"])]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ClaimFinalizedData {
+    #[topic]
+    pub claim_id: u64,
     pub version: u32,
     pub status: ClaimStatus,
     pub approve_votes: u32,
@@ -217,24 +213,25 @@ pub fn emit_claim_finalized(
     approve_votes: u32,
     reject_votes: u32,
 ) {
-    env.events().publish(
-        (symbol_short!("niffyins"), symbol_short!("clm_final"), claim_id),
-        ClaimFinalizedData {
-            version: EVENT_SCHEMA_VERSION,
-            status,
-            approve_votes,
-            reject_votes,
-            at_ledger: env.ledger().sequence(),
-        },
-    );
+    ClaimFinalizedData {
+        claim_id,
+        version: EVENT_SCHEMA_VERSION,
+        status,
+        approve_votes,
+        reject_votes,
+        at_ledger: env.ledger().sequence(),
+    }
+    .publish(env);
 }
 
 /// Emitted by `process_claim` on successful payout.
 /// topics: (NS, "clm_paid", claim_id)
 /// payload: ClaimPaidData
-#[contracttype]
+#[contractevent(topics = ["niffyins", "clm_paid"])]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ClaimPaidData {
+    #[topic]
+    pub claim_id: u64,
     pub version: u32,
     pub recipient: Address,
     /// Amount in stroops (i128; 7 decimals).
@@ -250,16 +247,15 @@ pub fn emit_claim_paid(
     amount: i128,
     asset: &Address,
 ) {
-    env.events().publish(
-        (symbol_short!("niffyins"), symbol_short!("clm_paid"), claim_id),
-        ClaimPaidData {
-            version: EVENT_SCHEMA_VERSION,
-            recipient: recipient.clone(),
-            amount,
-            asset: asset.clone(),
-            at_ledger: env.ledger().sequence(),
-        },
-    );
+    ClaimPaidData {
+        claim_id,
+        version: EVENT_SCHEMA_VERSION,
+        recipient: recipient.clone(),
+        amount,
+        asset: asset.clone(),
+        at_ledger: env.ledger().sequence(),
+    }
+    .publish(env);
 }
 
 // ── Admin / config events ─────────────────────────────────────────────────────
@@ -267,7 +263,7 @@ pub fn emit_claim_paid(
 /// Emitted by `update_multiplier_table`.
 /// topics: (NS, "tbl_upd")
 /// payload: PremiumTableUpdatedData
-#[contracttype]
+#[contractevent(topics = ["niffyins", "tbl_upd"])]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PremiumTableUpdatedData {
     pub version: u32,
@@ -275,102 +271,104 @@ pub struct PremiumTableUpdatedData {
 }
 
 pub fn emit_premium_table_updated(env: &Env, table_version: u32) {
-    env.events().publish(
-        (symbol_short!("niffyins"), symbol_short!("tbl_upd")),
-        PremiumTableUpdatedData {
-            version: EVENT_SCHEMA_VERSION,
-            table_version,
-        },
-    );
+    PremiumTableUpdatedData {
+        version: EVENT_SCHEMA_VERSION,
+        table_version,
+    }
+    .publish(env);
 }
 
 /// Emitted by `set_allowed_asset`.
 /// topics: (NS, "asset_set", asset)
 /// payload: AssetAllowlistedData
-#[contracttype]
+#[contractevent(topics = ["niffyins", "asset_set"])]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct AssetAllowlistedData {
+    #[topic]
+    pub asset: Address,
     pub version: u32,
     /// 1 = added to allowlist, 0 = removed.
     pub allowed: u32,
 }
 
 pub fn emit_asset_allowlisted(env: &Env, asset: &Address, allowed: bool) {
-    env.events().publish(
-        (symbol_short!("niffyins"), symbol_short!("asset_set"), asset.clone()),
-        AssetAllowlistedData {
-            version: EVENT_SCHEMA_VERSION,
-            allowed: if allowed { 1 } else { 0 },
-        },
-    );
+    AssetAllowlistedData {
+        asset: asset.clone(),
+        version: EVENT_SCHEMA_VERSION,
+        allowed: if allowed { 1 } else { 0 },
+    }
+    .publish(env);
 }
 
 // ── Admin rotation / config events ───────────────────────────────────────────
 
 /// Emitted by `propose_admin`.
 /// topics: (NS, "adm_prop", old_admin, new_admin)
-#[contracttype]
+#[contractevent(topics = ["niffyins", "adm_prop"])]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct AdminProposedData {
+    #[topic]
+    pub old_admin: Address,
+    #[topic]
+    pub new_admin: Address,
     pub version: u32,
 }
 
 pub fn emit_admin_proposed(env: &Env, old_admin: &Address, new_admin: &Address) {
-    env.events().publish(
-        (
-            symbol_short!("niffyins"),
-            symbol_short!("adm_prop"),
-            old_admin.clone(),
-            new_admin.clone(),
-        ),
-        AdminProposedData { version: EVENT_SCHEMA_VERSION },
-    );
+    AdminProposedData {
+        old_admin: old_admin.clone(),
+        new_admin: new_admin.clone(),
+        version: EVENT_SCHEMA_VERSION,
+    }
+    .publish(env);
 }
 
 /// Emitted by `accept_admin`.
 /// topics: (NS, "adm_acc", old_admin, new_admin)
-#[contracttype]
+#[contractevent(topics = ["niffyins", "adm_acc"])]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct AdminAcceptedData {
+    #[topic]
+    pub old_admin: Address,
+    #[topic]
+    pub new_admin: Address,
     pub version: u32,
 }
 
 pub fn emit_admin_accepted(env: &Env, old_admin: &Address, new_admin: &Address) {
-    env.events().publish(
-        (
-            symbol_short!("niffyins"),
-            symbol_short!("adm_acc"),
-            old_admin.clone(),
-            new_admin.clone(),
-        ),
-        AdminAcceptedData { version: EVENT_SCHEMA_VERSION },
-    );
+    AdminAcceptedData {
+        old_admin: old_admin.clone(),
+        new_admin: new_admin.clone(),
+        version: EVENT_SCHEMA_VERSION,
+    }
+    .publish(env);
 }
 
 /// Emitted by `cancel_admin`.
 /// topics: (NS, "adm_can", admin, cancelled_pending)
-#[contracttype]
+#[contractevent(topics = ["niffyins", "adm_can"])]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct AdminCancelledData {
+    #[topic]
+    pub admin: Address,
+    #[topic]
+    pub cancelled_pending: Address,
     pub version: u32,
 }
 
 pub fn emit_admin_cancelled(env: &Env, admin: &Address, cancelled_pending: &Address) {
-    env.events().publish(
-        (
-            symbol_short!("niffyins"),
-            symbol_short!("adm_can"),
-            admin.clone(),
-            cancelled_pending.clone(),
-        ),
-        AdminCancelledData { version: EVENT_SCHEMA_VERSION },
-    );
+    AdminCancelledData {
+        admin: admin.clone(),
+        cancelled_pending: cancelled_pending.clone(),
+        version: EVENT_SCHEMA_VERSION,
+    }
+    .publish(env);
 }
 
 /// Emitted by `set_token`.
 /// topics: (NS, "adm_tok")
 /// payload: TokenUpdatedData
-#[contracttype]
+#[contractevent(topics = ["niffyins", "adm_tok"])]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TokenUpdatedData {
     pub version: u32,
@@ -379,43 +377,44 @@ pub struct TokenUpdatedData {
 }
 
 pub fn emit_token_updated(env: &Env, old_token: &Address, new_token: &Address) {
-    env.events().publish(
-        (symbol_short!("niffyins"), symbol_short!("adm_tok")),
-        TokenUpdatedData {
-            version: EVENT_SCHEMA_VERSION,
-            old_token: old_token.clone(),
-            new_token: new_token.clone(),
-        },
-    );
+    TokenUpdatedData {
+        version: EVENT_SCHEMA_VERSION,
+        old_token: old_token.clone(),
+        new_token: new_token.clone(),
+    }
+    .publish(env);
 }
 
 /// Emitted by `pause` and `unpause`.
-/// topics: (NS, "adm_paused", admin)
+/// topics: (NS, "adm_paus", admin)
 /// payload: PauseToggledData
-#[contracttype]
+#[contractevent(topics = ["niffyins", "adm_paus"])]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PauseToggledData {
+    #[topic]
+    pub admin: Address,
     pub version: u32,
     /// 1 = paused, 0 = unpaused.
     pub paused: u32,
 }
 
 pub fn emit_pause_toggled(env: &Env, admin: &Address, paused: bool) {
-    env.events().publish(
-        (symbol_short!("niffyins"), symbol_short!("adm_paus"), admin.clone()),
-        PauseToggledData {
-            version: EVENT_SCHEMA_VERSION,
-            paused: if paused { 1 } else { 0 },
-        },
-    );
+    PauseToggledData {
+        admin: admin.clone(),
+        version: EVENT_SCHEMA_VERSION,
+        paused: if paused { 1 } else { 0 },
+    }
+    .publish(env);
 }
 
 /// Emitted by `drain`.
 /// topics: (NS, "adm_drn", admin)
 /// payload: DrainedData
-#[contracttype]
+#[contractevent(topics = ["niffyins", "adm_drn"])]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct DrainedData {
+    #[topic]
+    pub admin: Address,
     pub version: u32,
     pub recipient: Address,
     /// Amount in stroops (i128; 7 decimals).
@@ -423,12 +422,11 @@ pub struct DrainedData {
 }
 
 pub fn emit_drained(env: &Env, admin: &Address, recipient: &Address, amount: i128) {
-    env.events().publish(
-        (symbol_short!("niffyins"), symbol_short!("adm_drn"), admin.clone()),
-        DrainedData {
-            version: EVENT_SCHEMA_VERSION,
-            recipient: recipient.clone(),
-            amount,
-        },
-    );
+    DrainedData {
+        admin: admin.clone(),
+        version: EVENT_SCHEMA_VERSION,
+        recipient: recipient.clone(),
+        amount,
+    }
+    .publish(env);
 }

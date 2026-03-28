@@ -93,6 +93,7 @@ fn inject_approved_claim(
         appeal_deadline_ledger: 0,
         appeal_approve_votes: 0,
         appeal_reject_votes: 0,
+        status_history: soroban_sdk::Vec::new(env),
     };
     env.as_contract(contract_id, || {
         niffyinsure::storage::set_claim(env, &claim);

@@ -67,6 +67,8 @@ pub enum Error {
     AppealWindowStillOpen = 48,
     /// Admin `set_voting_duration_ledgers` value outside allowed [min, max] range.
     VotingDurationOutOfBounds = 49,
+    /// Batch get exceeded POLICY_BATCH_GET_MAX.
+    PolicyBatchTooLarge = 50,
 }
 
 pub fn check_policy(policy: &Policy) -> Result<(), Error> {
