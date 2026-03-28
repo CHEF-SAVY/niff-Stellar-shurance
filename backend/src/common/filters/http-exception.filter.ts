@@ -7,6 +7,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { Request, Response } from 'express';
+import { ValidationError } from 'class-validator';
 
 /**
  * Maps Stellar / Soroban error strings to stable API error codes.
