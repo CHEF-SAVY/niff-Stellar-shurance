@@ -55,6 +55,15 @@ export function QuoteForm({ onQuoteReceived }: QuoteFormProps) {
       return
     }
 
+    // Fire quote_started once per form session (first dirty + valid state)
+    if (!hasTrackedStart) {
+      setHasTrackedStart(true)
+      trackQuoteStarted({
+        riskCategory: watchedValues.riskCategory ?? 'MEDIUM',
+        contractType: watchedValues.contractType ?? 'DEFI_PROTOCOL',
+      })
+    }
+
     const timeout = setTimeout(async () => {
       try {
         setIsCalculating(true)
@@ -77,7 +86,7 @@ export function QuoteForm({ onQuoteReceived }: QuoteFormProps) {
     }, 800)
 
     return () => clearTimeout(timeout)
-  }, [watchedValues, isValid, isDirty, toast])
+  }, [watchedValues, isValid, isDirty, toast, hasTrackedStart])
 
   const onSubmit = async (data: QuoteFormData) => {
     try {
@@ -86,6 +95,10 @@ export function QuoteForm({ onQuoteReceived }: QuoteFormProps) {
       setCurrentQuote(quote)
       setQuoteStatus(`Quote confirmed: premium ${quote.premium} XLM.`)
       onQuoteReceived?.(quote)
+      trackQuoteReceived({
+        riskCategory: data.riskCategory,
+        contractType: data.contractType,
+      })
       
       toast({
         title: 'Quote Generated',
@@ -343,7 +356,7 @@ export function QuoteForm({ onQuoteReceived }: QuoteFormProps) {
               </Badge>
 
               <Button className="w-full" asChild>
-                <a href={`/policy?quoteId=${currentQuote.quoteId}`}>
+                <a href={`/policy?quoteId=${currentQuote.quoteId}`} onClick={() => trackBindStarted()}>
                   Purchase Policy
                 </a>
               </Button>

@@ -23,6 +23,7 @@ import {
   isTerminal,
   isVoteOpen,
 } from '@/lib/schemas/vote'
+import { trackVoteCast } from '@/lib/analytics'
 
 import { VoteConfirmModal } from './vote-confirm-modal'
 import { VoteEducationPanel } from './vote-education-panel'
@@ -147,6 +148,7 @@ export function ClaimVotePanel({
       )
       setEligibility((prev) => (prev ? { ...prev, priorVote: pendingVote } : prev))
       setSubmitState('done')
+      trackVoteCast(pendingVote === 'Approve' ? 'approve' : 'reject')
 
       toast({
         title: 'Vote submitted',
